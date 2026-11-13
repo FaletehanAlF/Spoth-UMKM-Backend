@@ -1,12 +1,14 @@
 import express, { type Express, type Request, type Response } from 'express';
 
-const app: Express = express();
-const port = 3000;
+import routes from './routes/index.js';
 
-app.get('/', (req: Request, res: Response) => {
+const app: Express = express();
+
+app.use(express.json());
+app.use('/api', routes);
+
+app.get('/', (_req: Request, res: Response) => {
   res.send('Hello World!');
 });
 
-app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
-});
+export default app;
