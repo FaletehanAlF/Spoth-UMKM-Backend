@@ -7,6 +7,8 @@ import userRouter from './user.route.js';
 import notificationRouter from './notification.route.js';
 import placeRouter from './place.route.js';
 import uploadRouter from './upload.route.js';
+import bookingRouter from './booking.route.js';
+import epassRouter from './epass.route.js';
 
 const router = Router();
 
@@ -50,5 +52,7 @@ router.use('/users', userRouter);
 router.use('/notifications', notificationRouter);
 router.use('/places', placeRouter);
 router.use('/uploads', uploadRouter);
+router.use('/bookings', bookingRouter);
+router.use('/epass', epassRouter);
 
 export default router;
