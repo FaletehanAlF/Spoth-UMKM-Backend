@@ -1,28 +1,19 @@
 import { readFileSync } from 'node:fs';
 
-import pg from 'pg';
+import { Pool, type PoolClient, type PoolConfig } from 'pg';
 
 import { env } from './env.js';
 
-const { Pool } = pg;
-
-function buildSslConfig(): pg.PoolConfig['ssl'] {
+function buildSslConfig(): PoolConfig['ssl'] {
   if (!env.db.ssl) {
     return undefined;
   }
-
-  // Aiven CA certificate (ca.pem) is recommended. Set DB_SSL_CA to its path
-  // to enable full certificate verification against the Aiven CA.
   if (env.db.sslCaPath) {
     return {
       ca: readFileSync(env.db.sslCaPath, 'utf8'),
       rejectUnauthorized: true,
     };
   }
-
-  // Aiven's managed certificates are not part of the system trust store.
-  // Traffic is still encrypted, but certificate verification is skipped
-  // until DB_SSL_CA is configured.
   console.warn(
     '[database] DB_SSL_CA is not set. TLS is encrypted but the Aiven CA certificate is not verified.',
   );
@@ -70,6 +61,41 @@ export async function checkDatabaseConnection(): Promise<Date> {
   }
 
   return serverTime;
+}
+
+/**
+ * Client database yang dipakai di dalam satu transaksi.
+ * `pg` memberi turunan tipe `PoolClient` yang sudah mewarisi method query.
+ */
+export type DbClient = PoolClient;
+
+/**
+ * Menjalankan callback di dalam satu transaksi database.
+ *
+ * - Callback menerima `client` (satu koneksi khusus).
+ * - Jika callback melempar error, transaksi di-rollback.
+ * - Jika callback sukses, transaksi di-commit.
+ *
+ * Transaksi dipakai pada pembuatan pemesanan (validasi jadwal anti
+ * double booking) dan pembayaran simulasi (pembuatan E-Pass).
+ */
+export async function withTransaction<T>(
+  callback: (client: DbClient) => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    const result = await callback(client);
+    await client.query('COMMIT');
+
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function closeDatabasePool(): Promise<void> {

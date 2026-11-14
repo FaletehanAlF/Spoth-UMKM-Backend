@@ -1,5 +1,5 @@
 import app from './app.js';
-import { checkDatabaseConnection } from './config/database.js';
+import { checkDatabaseConnection, closeDatabasePool } from './config/database.js';
 import { env } from './config/env.js';
 
 const port = env.port;
@@ -14,9 +14,25 @@ async function start(): Promise<void> {
     console.error('[database] The server will keep running without a verified database connection.');
   }
 
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
+    console.log(`Environment: ${env.nodeEnv}`);
   });
+
+  // Menutup koneksi database dengan rapi saat server dihentikan (Ctrl+C).
+  const shutdown = (signal: string): void => {
+    console.log(`\n[server] Received ${signal}. Shutting down...`);
+
+    server.close(() => {
+      void closeDatabasePool().then(() => {
+        console.log('[server] Closed database pool. Goodbye!');
+        process.exit(0);
+      });
+    });
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 void start();

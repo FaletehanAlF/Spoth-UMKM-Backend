@@ -7,3 +7,12 @@ node_modules/
 dist/
 build/
 coverage/
+
+# Folder penyimpanan foto tempat di root project (dibuat otomatis saat server berjalan).
+# Tanda `/` di depan Agar hanya folder root yang diabaikan, bukan folder
+# bernama "uploads" di dalam modul.
+/uploads/
+
+# Berkas log
+*.log
+npm-debug.log*
