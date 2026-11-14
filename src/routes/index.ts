@@ -4,6 +4,7 @@ import { checkDatabaseConnection } from '../config/database.js';
 import { env } from '../config/env.js';
 import authRouter from './auth.route.js';
 import userRouter from './user.route.js';
+import notificationRouter from './notification.route.js';
 
 const router = Router();
 
@@ -44,5 +45,6 @@ router.get('/health', async (_req, res) => {
 // Modul utama aplikasi.
 router.use('/auth', authRouter);
 router.use('/users', userRouter);
+router.use('/notifications', notificationRouter);
 
 export default router;
