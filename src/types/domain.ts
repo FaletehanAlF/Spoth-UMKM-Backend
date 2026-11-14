@@ -89,3 +89,18 @@ export const PAYMENT_METHODS: PaymentMethod[] = Object.values(PAYMENT_METHOD);
 
 /** Prefix kode booking pada E-Pass. SRS Tabel 3.3 (`kode_booking`). */
 export const BOOKING_CODE_PREFIX = 'SPOTH';
+
+/**
+ * Bentuk data pengguna yang dikirim ke frontend (SRS Tabel 4.2).
+ *
+ * Diletakkan di sini (bukan di modul auth/user) agar kedua modul dapat
+ * memakainya tanpa import silang (auth -> user).
+ */
+export interface UserResponse {
+  id: string;
+  nama: string;
+  email: string;
+  no_hp: string | null;
+  role: UserRole;
+  created_at?: string;
+}
