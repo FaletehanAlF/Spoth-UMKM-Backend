@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { checkDatabaseConnection } from '../config/database.js';
 import { env } from '../config/env.js';
+import authRouter from './auth.route.js';
 
 const router = Router();
 
@@ -39,19 +40,7 @@ router.get('/health', async (_req, res) => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// Registrasi router modul fitur.
-//
-// Setiap fitur mendaftarkan router-nya sendiri pada branch feature-nya.
-// Contoh (branch feature/authentication):
-//
-//   import authRouter from '../modules/auth/auth.route.js';
-//   ...
-//   router.use('/auth', authRouter);
-//
-// Urutan registrasi mengikuti urutan integrasi:
-//   /auth -> /users -> /notifications -> /places -> /bookings -> /epass
-//   -> /payments -> /uploads
-// ---------------------------------------------------------------------------
+// Modul utama aplikasi.
+router.use('/auth', authRouter);
 
 export default router;
