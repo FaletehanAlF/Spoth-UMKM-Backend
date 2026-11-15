@@ -56,6 +56,12 @@ export const env = {
     dir: path.resolve(process.cwd(), process.env.UPLOAD_DIR?.trim() || 'uploads'),
     publicPath: '/uploads',
   },
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME?.trim() ?? '',
+    apiKey: process.env.CLOUDINARY_API_KEY?.trim() ?? '',
+    apiSecret: process.env.CLOUDINARY_API_SECRET ?? '',
+    folder: process.env.CLOUDINARY_FOLDER?.trim() || 'spoth-umkm',
+  },
 } as const;
 
 export function getJwtSecret(): string {
@@ -64,4 +70,21 @@ export function getJwtSecret(): string {
   }
 
   return env.jwt.secret;
+}
+
+/**
+ * Memastikan konfigurasi Cloudinary sudah terisi di .env.
+ * Dipakai oleh modul konfigurasi Cloudinary sebelum melakukan upload.
+ */
+export function getCloudinaryConfig(): {
+  cloudName: string;
+  apiKey: string;
+  apiSecret: string;
+  folder: string;
+} {
+  if (!env.cloudinary.cloudName || !env.cloudinary.apiKey || !env.cloudinary.apiSecret) {
+    throw new Error('Konfigurasi Cloudinary belum lengkap di .env');
+  }
+
+  return env.cloudinary;
 }

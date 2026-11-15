@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
+import multer from 'multer';
 
 import { AppError } from '../utils/app-error.js';
 
@@ -30,6 +31,23 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
       success: false,
       message: error.message,
       ...(error.errors ? { errors: error.errors } : {}),
+    });
+    return;
+  }
+
+  // Error dari Multer (ukuran file terlalu besar, dll).
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      res.status(400).json({
+        success: false,
+        message: 'Ukuran gambar maksimal 5 MB',
+      });
+      return;
+    }
+
+    res.status(400).json({
+      success: false,
+      message: 'File upload tidak valid',
     });
     return;
   }
