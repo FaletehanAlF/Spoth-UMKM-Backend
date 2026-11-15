@@ -1,6 +1,9 @@
+import http from 'node:http';
+
 import app from './app.js';
 import { checkDatabaseConnection, closeDatabasePool } from './config/database.js';
 import { env } from './config/env.js';
+import { initSocket } from './config/socket.js';
 
 const port = env.port;
 
@@ -14,7 +17,12 @@ async function start(): Promise<void> {
     console.error('[database] The server will keep running without a verified database connection.');
   }
 
-  const server = app.listen(port, () => {
+  const httpServer = http.createServer(app);
+
+  // Integrasi Socket.IO untuk notifikasi real-time.
+  initSocket(httpServer);
+
+  const server = httpServer.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
     console.log(`Environment: ${env.nodeEnv}`);
   });

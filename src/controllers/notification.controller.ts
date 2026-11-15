@@ -4,6 +4,7 @@ import { sendPaginated, sendSuccess } from '../utils/api-response.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { paramString } from '../utils/validators.js';
 import {
+  deleteNotification,
   getNotificationSummary,
   listNotifications,
   markAllAsRead,
@@ -57,5 +58,17 @@ export const readAllNotifications = asyncHandler(
     const updated = await markAllAsRead(req.user!.id);
 
     sendSuccess(res, 200, 'Semua notifikasi ditandai sudah dibaca', { jumlah: updated });
+  },
+);
+
+/**
+ * DELETE /api/notifications/:id
+ * Menghapus satu notifikasi milik pengguna yang sedang login.
+ */
+export const removeNotification = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    await deleteNotification(req.user!.id, paramString(req.params.id));
+
+    sendSuccess(res, 200, 'Notifikasi berhasil dihapus');
   },
 );

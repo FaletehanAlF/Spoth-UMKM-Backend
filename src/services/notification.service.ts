@@ -1,4 +1,5 @@
 import { pool } from '../config/database.js';
+import { getIO } from '../config/socket.js';
 import type { Queryable } from '../types/database.js';
 import { notFound } from '../utils/app-error.js';
 import { buildPaginatedResult, toOffset, type PaginatedResult } from '../utils/pagination.js';
@@ -14,6 +15,7 @@ const NOTIFICATION_COLUMNS = `
   user_id::text AS user_id,
   judul        AS judul,
   pesan        AS pesan,
+  jenis        AS jenis,
   dibaca       AS dibaca,
   created_at   AS created_at,
   metadata     AS metadata
@@ -24,6 +26,7 @@ function toNotificationResponse(row: NotificationRow): NotificationResponse {
     id: row.id,
     judul: row.judul,
     pesan: row.pesan,
+    jenis: row.jenis ?? null,
     dibaca: row.dibaca,
     created_at: row.created_at?.toISOString(),
     metadata: row.metadata ?? null,
@@ -43,11 +46,32 @@ export async function createNotification(
   pesan: string,
   metadata?: Record<string, unknown>,
 ): Promise<void> {
-  await client.query(
-    `INSERT INTO notifications (user_id, judul, pesan, metadata)
-     VALUES ($1::integer, $2, $3, $4::jsonb)`,
-    [userId, judul, pesan, metadata ? JSON.stringify(metadata) : null],
+  const jenis = (metadata?.tipe as string | undefined) ?? null;
+
+  const result = await client.query<{ id: string; created_at: Date; jenis: string | null }>(
+    `INSERT INTO notifications (user_id, judul, pesan, jenis, metadata)
+     VALUES ($1::integer, $2, $3, $4, $5::jsonb)
+     RETURNING id::text AS id, created_at, jenis`,
+    [userId, judul, pesan, jenis, metadata ? JSON.stringify(metadata) : null],
   );
+
+  const row = result.rows[0];
+
+  // Kirim notifikasi real-time bila penerima sedang terhubung. Notifikasi
+  // tetap tersimpan di database (insert di atas) meskipun penerima offline.
+  const io = getIO();
+
+  if (io && row) {
+    io.to(`user:${userId}`).emit('notification:new', {
+      id: row.id,
+      judul,
+      pesan,
+      jenis: row.jenis ?? jenis,
+      dibaca: false,
+      created_at: row.created_at?.toISOString(),
+      metadata: metadata ?? null,
+    });
+  }
 }
 
 /**
@@ -133,4 +157,16 @@ export async function markAllAsRead(userId: string): Promise<number> {
   );
 
   return result.rowCount ?? 0;
+}
+
+/** Menghapus satu notifikasi milik pengguna. */
+export async function deleteNotification(userId: string, notificationId: string): Promise<void> {
+  const result = await pool.query(
+    'DELETE FROM notifications WHERE id = $1::integer AND user_id = $2::integer',
+    [notificationId, userId],
+  );
+
+  if (result.rowCount === 0) {
+    throw notFound('Notifikasi tidak ditemukan');
+  }
 }
