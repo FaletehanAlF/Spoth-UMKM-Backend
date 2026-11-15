@@ -5,6 +5,7 @@ export interface NotificationRow {
   user_id: string;
   judul: string;
   pesan: string;
+  jenis: string | null;
   dibaca: boolean;
   created_at: Date;
   /** Data tambahan dalam bentuk JSON (mis. id pemesanan). */
@@ -15,6 +16,7 @@ export interface NotificationResponse {
   id: string;
   judul: string;
   pesan: string;
+  jenis: string | null;
   dibaca: boolean;
   created_at: string;
   metadata: Record<string, unknown> | null;
