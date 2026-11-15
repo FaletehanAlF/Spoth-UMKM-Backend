@@ -15,4 +15,13 @@ uploadRouter.post(
   uploadPhoto,
 );
 
+// Alias agar endpoint upload gambar lebih mudah ditemukan / diuji.
+uploadRouter.post(
+  '/image',
+  authenticate,
+  authorize(USER_ROLE.HOST),
+  uploadImage,
+  uploadPhoto,
+);
+
 export default uploadRouter;
