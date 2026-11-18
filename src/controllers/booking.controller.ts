@@ -5,6 +5,7 @@ import { asyncHandler } from '../utils/async-handler.js';
 import { paramString } from '../utils/validators.js';
 import {
   cancelBooking,
+  cancelBookingByHost,
   createBooking,
   getBookingById,
   listBookings,
@@ -73,6 +74,18 @@ export const cancelExistingBooking = asyncHandler(
 );
 
 /**
+ * POST /api/bookings/:id/cancel-by-host
+ * Host membatalkan pemesanan pada tempatnya.
+ */
+export const cancelBookingAsHost = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const booking = await cancelBookingByHost(paramString(req.params.id), req.user!.id);
+
+    sendSuccess(res, 200, 'Pemesanan berhasil dibatalkan oleh pemilik', { booking });
+  },
+);
+
+/**
  * GET /api/bookings/preview-price
  * Pratinjau rincian biaya sebelum Tenant melakukan pemesanan.
  */
@@ -83,8 +96,9 @@ export const getPricePreview = asyncHandler(
       String(query.place_id),
       query.tanggal_mulai,
       query.jumlah_durasi,
+      req.user!.id,
     );
 
-    sendSuccess(res, 200, 'Bersuccess menghitung pratinjau biaya', { pratinjau: preview });
+    sendSuccess(res, 200, 'Berhasil menghitung pratinjau biaya', { pratinjau: preview });
   },
 );

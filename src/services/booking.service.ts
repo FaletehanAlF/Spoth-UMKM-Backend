@@ -235,7 +235,7 @@ export async function createBooking(
       { booking_id: booking.id, tipe: 'PEMESANAN_BARU' },
     );
 
-    return { booking, place };
+    return { booking };
   });
 
   const booking = await getBookingById(result.booking.id, tenantId, 'TENANT');
@@ -310,6 +310,16 @@ export async function listBookings(
     conditions.push(`b.status = $${values.length}`);
   }
 
+  if (query.kode_booking) {
+    values.push(`%${query.kode_booking}%`);
+    conditions.push(`b.kode_booking ILIKE $${values.length}`);
+  }
+
+  if (query.tanggal_mulai) {
+    values.push(query.tanggal_mulai);
+    conditions.push(`b.tanggal_mulai = $${values.length}::date`);
+  }
+
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const countResult = await pool.query<{ total: string }>(
@@ -378,10 +388,26 @@ export async function cancelBooking(
     throw new AppError('Pemesanan ini sudah dibatalkan', 400);
   }
 
-  await pool.query(
-    `UPDATE bookings SET status = $2 WHERE id = $1::integer`,
-    [bookingId, BOOKING_STATUS.DIBATALKAN],
+  if (booking.status === BOOKING_STATUS.LUNAS) {
+    throw new AppError('Pemesanan yang sudah lunas tidak dapat dibatalkan', 400);
+  }
+
+  if (booking.status !== BOOKING_STATUS.MENUNGGU_PEMBAYARAN) {
+    throw new AppError('Pemesanan hanya dapat dibatalkan jika berstatus menunggu pembayaran', 400);
+  }
+
+  const updateResult = await pool.query(
+    `UPDATE bookings
+     SET status = $2
+     WHERE id = $1::integer
+       AND status = $3
+     RETURNING id`,
+    [bookingId, BOOKING_STATUS.DIBATALKAN, BOOKING_STATUS.MENUNGGU_PEMBAYARAN],
   );
+
+  if ((updateResult.rowCount ?? 0) === 0) {
+    throw new AppError('Pemesanan ini sudah tidak dapat dibatalkan', 400);
+  }
 
   const placeResult = await pool.query<{ host_id: string; nama_tempat: string }>(
     `SELECT host_id::text AS host_id, nama_tempat FROM places WHERE id = $1::integer`,
@@ -404,6 +430,80 @@ export async function cancelBooking(
 }
 
 /**
+ * Membatalkan pemesanan oleh Pemilik tempat (jalur operasional untuk
+ * membersihkan pemesanan yang masih menunggu pembayaran).
+ *
+ * Hanya pemesanan berstatus MENUNGGU_PEMBAYARAN yang boleh dibatalkan.
+ * Pemilik hanya boleh membatalkan pemesanan pada tempat miliknya sendiri.
+ */
+export async function cancelBookingByHost(
+  bookingId: string,
+  hostId: string,
+): Promise<BookingResponse> {
+  const result = await pool.query<{
+    id: string;
+    tenant_id: string;
+    place_id: string;
+    status: string;
+    host_id: string;
+    nama_tempat: string;
+  }>(
+    `SELECT b.id::text AS id, b.tenant_id::text AS tenant_id,
+            b.place_id::text AS place_id, b.status,
+            p.host_id::text AS host_id, p.nama_tempat
+     FROM bookings b
+     JOIN places p ON p.id = b.place_id
+     WHERE b.id = $1::integer
+     LIMIT 1`,
+    [bookingId],
+  );
+
+  const booking = result.rows[0];
+
+  if (!booking) {
+    throw notFound('Pemesanan tidak ditemukan');
+  }
+
+  if (booking.host_id !== hostId) {
+    throw forbidden('Anda hanya bisa membatalkan pemesanan pada tempat Anda sendiri');
+  }
+
+  const updateResult = await pool.query(
+    `UPDATE bookings
+     SET status = $2
+     WHERE id = $1::integer
+       AND status = $3
+     RETURNING id`,
+    [bookingId, BOOKING_STATUS.DIBATALKAN, BOOKING_STATUS.MENUNGGU_PEMBAYARAN],
+  );
+
+  if ((updateResult.rowCount ?? 0) === 0) {
+    if (booking.status === BOOKING_STATUS.DIBATALKAN) {
+      throw new AppError('Pemesanan ini sudah dibatalkan', 400);
+    }
+
+    if (booking.status === BOOKING_STATUS.LUNAS) {
+      throw new AppError('Pemesanan yang sudah lunas tidak dapat dibatalkan', 400);
+    }
+
+    throw new AppError(
+      'Pemesanan hanya dapat dibatalkan jika berstatus menunggu pembayaran',
+      400,
+    );
+  }
+
+  await createNotification(
+    pool,
+    booking.tenant_id,
+    'Pemesanan dibatalkan oleh pemilik',
+    `Pemesanan ${booking.nama_tempat} telah dibatalkan oleh pemilik tempat.`,
+    { booking_id: booking.id, tipe: 'PEMESANAN_DIBATALKAN' },
+  );
+
+  return getBookingById(bookingId, hostId, 'HOST');
+}
+
+/**
  * Menghitung pratinjau biaya sebelum Tenant menekan tombol pesan.
  * Dipakai pada halaman "Form Pemesanan" untuk menampilkan rincian tagihan.
  */
@@ -411,7 +511,12 @@ export async function previewPrice(
   placeId: string,
   tanggalMulai: string,
   jumlahDurasi: number,
+  tenantId?: string,
 ): Promise<PricePreviewResponse> {
+  if (tanggalMulai < today()) {
+    throw new AppError('Tanggal mulai sewa tidak boleh di masa lalu', 400);
+  }
+
   const result = await pool.query<PlaceRow>(
     `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
             alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
@@ -426,6 +531,14 @@ export async function previewPrice(
 
   if (!place) {
     throw notFound('Tempat tidak ditemukan');
+  }
+
+  if (place.status !== 'AKTIF') {
+    throw new AppError('Tempat sedang tidak aktif dan tidak bisa dipesan', 400);
+  }
+
+  if (tenantId && place.host_id === tenantId) {
+    throw new AppError('Anda tidak bisa menyewa tempat milik Anda sendiri', 400);
   }
 
   const tanggalSelesai = calculateEndDate(tanggalMulai, place.tipe_durasi, jumlahDurasi);

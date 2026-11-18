@@ -22,6 +22,21 @@ async function start(): Promise<void> {
   // Integrasi Socket.IO untuk notifikasi real-time.
   initSocket(httpServer);
 
+  // Menangani error saat server dijalankan, misalnya port sudah dipakai
+  // oleh proses lain, agar pesan error lebih jelas dan tidak crash.
+  httpServer.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.code === 'EADDRINUSE') {
+      console.error(
+        `[server] Port ${port} sudah digunakan oleh proses lain. ` +
+          'Hentikan proses tersebut atau ubah PORT di .env.',
+      );
+    } else {
+      console.error(`[server] Gagal menjalankan server: ${error.message}`);
+    }
+
+    process.exit(1);
+  });
+
   const server = httpServer.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
     console.log(`Environment: ${env.nodeEnv}`);

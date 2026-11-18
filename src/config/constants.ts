@@ -7,9 +7,6 @@
 /** Besarnya komisi platform. SRS Subbab 3.3.6: 10% dari total harga. */
 export const COMMISSION_RATE = 0.1;
 
-/** Jumlah hari minimal sebelum tanggal mulai yang boleh dipesan. */
-export const MIN_BOOKING_LEAD_DAYS = 0;
-
 /** Durasi sewa maksimum (dalam satuan durasi tempat). */
 export const MAX_BOOKING_DURATION = 365;
 
