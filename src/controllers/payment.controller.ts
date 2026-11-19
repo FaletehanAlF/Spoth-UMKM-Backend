@@ -26,10 +26,17 @@ export const payBooking = asyncHandler(
 /**
  * GET /api/payments/:bookingId
  * Mengambil detail pembayaran sebuah pemesanan.
+ *
+ * Layanan ini juga mengembalikan `403` bila user bukan TENANT yang membayar
+ * atau HOST pemilik tempat (IDOR fix).
  */
 export const getPayment = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const payment = await getPaymentByBookingId(paramString(req.params.id));
+    const payment = await getPaymentByBookingId(
+      paramString(req.params.id),
+      req.user!.id,
+      req.user!.role,
+    );
 
     if (!payment) {
       sendSuccess(res, 404, 'Belum ada pembayaran untuk pemesanan ini', { payment: null });

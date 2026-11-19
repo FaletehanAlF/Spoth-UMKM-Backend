@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { BOOKING_STATUS } from '../types/domain.js';
 import { MAX_BOOKING_DURATION } from '../config/constants.js';
-import { paginationQuerySchema } from '../utils/validators.js';
+import { dateOnlySchema, paginationQuerySchema } from '../utils/validators.js';
 
 /**
  * Skema pembuatan pemesanan (SRS Tabel 3.4 Halaman "Form Pemesanan").
@@ -16,12 +16,7 @@ export const createBookingSchema = z
       .number({ error: 'Tempat wajib dipilih' })
       .int('Tempat wajib dipilih')
       .positive('Tempat wajib dipilih'),
-    tanggal_mulai: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal harus YYYY-MM-DD')
-      .refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)), {
-        message: 'Tanggal tidak valid',
-      }),
+    tanggal_mulai: dateOnlySchema,
     jumlah_durasi: z.coerce
       .number({ error: 'Lama sewa harus berupa angka' })
       .int('Lama sewa harus bilangan bulat')
@@ -32,10 +27,6 @@ export const createBookingSchema = z
       .trim()
       .min(1, 'Jenis usaha wajib diisi')
       .max(100, 'Jenis usaha maksimal 100 karakter'),
-    tanggal_selesai: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal harus YYYY-MM-DD')
-      .optional(),
   })
   .strict();
 
@@ -44,6 +35,8 @@ export type CreateBookingPayload = z.infer<typeof createBookingSchema>;
 /** Parameter daftar riwayat penyewaan. */
 export const bookingQuerySchema = paginationQuerySchema.extend({
   status: z.enum(BOOKING_STATUS, { error: 'Status pemesanan tidak valid' }).optional(),
+  kode_booking: z.string().trim().max(30, 'Kode booking terlalu panjang').optional(),
+  tanggal_mulai: dateOnlySchema.optional(),
 });
 
 export type BookingQueryPayload = z.infer<typeof bookingQuerySchema>;
@@ -54,9 +47,7 @@ export const pricePreviewSchema = z.object({
     .number({ error: 'Tempat wajib dipilih' })
     .int('Tempat wajib dipilih')
     .positive('Tempat wajib dipilih'),
-  tanggal_mulai: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal harus YYYY-MM-DD'),
+  tanggal_mulai: dateOnlySchema,
   jumlah_durasi: z.coerce
     .number({ error: 'Lama sewa harus berupa angka' })
     .int('Lama sewa harus bilangan bulat')

@@ -97,12 +97,14 @@ export async function getEPass(
   const isOwnerTenant = row.tenant_id === requesterId;
   const isOwnerHost = row.host_id === requesterId;
 
-  if (requesterRole === 'TENANT' && !isOwnerTenant) {
-    throw forbidden('Anda hanya bisa melihat E-Pass pemesanan milik Anda sendiri');
-  }
+  // Pola default-deny pada E-Pass: hanya TENANT milik pemesanan atau HOST
+  // pemilik tempat yang boleh melihat.
+  const isAllowed =
+    (requesterRole === 'TENANT' && isOwnerTenant) ||
+    (requesterRole === 'HOST' && isOwnerHost);
 
-  if (requesterRole === 'HOST' && !isOwnerHost) {
-    throw forbidden('Anda hanya bisa melihat E-Pass pemesanan pada tempat Anda sendiri');
+  if (!isAllowed) {
+    throw forbidden('Anda tidak diizinkan membaca E-Pass ini');
   }
 
   if (row.status !== BOOKING_STATUS.LUNAS || !row.kode_booking) {

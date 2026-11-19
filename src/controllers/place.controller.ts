@@ -40,7 +40,10 @@ export const searchPlaces = asyncHandler(
  */
 export const getPlace = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const place = await getPlaceDetail(paramString(req.params.id));
+    const place = await getPlaceDetail(
+      paramString(req.params.id),
+      req.user ? { id: req.user.id, role: req.user.role } : undefined,
+    );
 
     sendSuccess(res, 200, 'Berhasil memuat detail tempat', { place });
   },

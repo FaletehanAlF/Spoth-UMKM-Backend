@@ -1,6 +1,12 @@
 import { pool, withTransaction } from '../config/database.js';
-import { BOOKING_STATUS, PAYMENT_STATUS, type PaymentMethod } from '../types/domain.js';
+import {
+  BOOKING_STATUS,
+  PAYMENT_STATUS,
+  type PaymentMethod,
+  type UserRole,
+} from '../types/domain.js';
 import { AppError, forbidden, notFound } from '../utils/app-error.js';
+import { canAccessPayment } from '../utils/access-control.js';
 import { createNotification } from './notification.service.js';
 import { generateKodeBooking } from './booking.service.js';
 import type { PaymentResponse, PaymentResult, PaymentRow } from '../types/payment.types.js';
@@ -166,11 +172,45 @@ export async function createPayment(
 }
 
 /**
- * Mengambil riwayat pembayaran sebuah pemesanan.
- * Dipakai untuk menampilkan detail pembayaran pada halaman riwayat.
+ * Transformasi baris tabel `payments` menjadi bentuk respons API.
  */
-export async function getPaymentByBookingId(bookingId: string): Promise<PaymentResponse | null> {
-  const result = await pool.query<PaymentRow>(
+function toPaymentResponse(row: PaymentRow & { tenant_id: string; host_id: string }): PaymentResponse {
+  return {
+    id: row.id,
+    booking_id: row.booking_id,
+    metode: row.metode,
+    jumlah: toNumber(row.jumlah),
+    status: row.status,
+    paid_at: row.paid_at?.toISOString() ?? null,
+    created_at: row.created_at?.toISOString(),
+    kode_booking: row.kode_booking ?? null,
+    total_harga: toNumber(row.total_harga),
+    komisi_platform: toNumber(row.komisi_platform),
+    pendapatan_host: toNumber(row.pendapatan_host),
+    nama_tempat: row.nama_tempat,
+  };
+}
+
+/**
+ * Ambil detail pembayaran sebuah pemesanan.
+ *
+ * Hardening IDOR: fungsi ini dipanggil oleh user yang telah otentikasi
+ * melalui `authenticate`. Kode `403` dikembalikan bila:
+ * - pembayaran ada, tetapi user bukan:
+ *   - TENANT yang menjadi `b.tenant_id`, atau
+ *   - HOST yang menjadi `p.host_id` (pemilik tempat).
+ *
+ * Jika pembayaran tidak ada, kembalikan `null` → controller kembalikan
+ * 404 (kompatibel dengan frontend lama).
+ *
+ * Posisi pemilik dideteksi dari database (tidak percaya role dari token).
+ */
+export async function getPaymentByBookingId(
+  bookingId: string,
+  requesterId: string,
+  requesterRole: UserRole,
+): Promise<PaymentResponse | null> {
+  const result = await pool.query<PaymentRow & { tenant_id: string; host_id: string }>(
     `SELECT
        pay.id::text       AS id,
        pay.booking_id::text AS booking_id,
@@ -183,7 +223,9 @@ export async function getPaymentByBookingId(bookingId: string): Promise<PaymentR
        b.total_harga      AS total_harga,
        b.komisi_platform  AS komisi_platform,
        b.pendapatan_host  AS pendapatan_host,
-       p.nama_tempat      AS nama_tempat
+       p.nama_tempat      AS nama_tempat,
+       b.tenant_id::text  AS tenant_id,
+       p.host_id::text    AS host_id
      FROM payments pay
      JOIN bookings b ON b.id = pay.booking_id
      JOIN places p ON p.id = b.place_id
@@ -199,18 +241,16 @@ export async function getPaymentByBookingId(bookingId: string): Promise<PaymentR
     return null;
   }
 
-  return {
-    id: row.id,
-    booking_id: row.booking_id,
-    metode: row.metode,
-    jumlah: toNumber(row.jumlah),
-    status: row.status,
-    paid_at: row.paid_at?.toISOString() ?? null,
-    created_at: row.created_at?.toISOString(),
-    kode_booking: row.kode_booking ?? null,
-    total_harga: toNumber(row.total_harga),
-    komisi_platform: toNumber(row.komisi_platform),
-    pendapatan_host: toNumber(row.pendapatan_host),
-    nama_tempat: row.nama_tempat,
-  };
+  const isAllowed = canAccessPayment(
+    { id: requesterId, role: requesterRole },
+    row.tenant_id,
+    row.host_id,
+  );
+
+  if (!isAllowed) {
+    // Default-deny: jangan bocorkan detail apa pun ke pihak yang tidak berhak.
+    throw forbidden('Anda tidak diizinkan membaca data pembayaran ini');
+  }
+
+  return toPaymentResponse(row);
 }

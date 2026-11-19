@@ -20,6 +20,9 @@ export interface PlaceRow {
   status: PlaceStatus;
   created_at: Date;
   updated_at: Date;
+  /** Batas periode tempat dapat disewa (opsional). */
+  tanggal_mulai_tersedia: string | null;
+  tanggal_selesai_tersedia: string | null;
   /** Nama host, diambil dari tabel `users`. */
   nama_host?: string;
   /** Harga yang benar-benar dipakai (promo bila ada). */
@@ -51,6 +54,8 @@ export interface PlaceResponse {
   status: PlaceStatus;
   created_at: string;
   updated_at: string;
+  tanggal_mulai_tersedia: string | null;
+  tanggal_selesai_tersedia: string | null;
   foto: string[];
   nama_host?: string;
   jumlah_foto?: number;
@@ -92,6 +97,8 @@ export interface CreatePlaceInput {
   harga_promo?: number;
   tipe_durasi: DurationType;
   status?: PlaceStatus;
+  tanggal_mulai_tersedia?: string | null;
+  tanggal_selesai_tersedia?: string | null;
   foto?: string[];
 }
 
@@ -107,6 +114,8 @@ export interface UpdatePlaceInput {
   harga_promo?: number | null;
   tipe_durasi?: DurationType;
   status?: PlaceStatus;
+  tanggal_mulai_tersedia?: string | null;
+  tanggal_selesai_tersedia?: string | null;
   foto?: string[];
 }
 
@@ -132,6 +141,53 @@ export interface MyPlaceQuery {
 export interface AvailabilityQuery {
   tanggal_mulai: string;
   jumlah_durasi: number;
+}
+
+/** Aturan ketersediaan tempat (berbasis tanggal/hari/bulan). */
+export type AvailabilityRuleType = 'TANGGAL' | 'HARI' | 'BULAN';
+
+export interface AvailabilityRuleRow {
+  id: string;
+  place_id: string;
+  tipe_aturan: AvailabilityRuleType;
+  tanggal_mulai: string;
+  tanggal_selesai: string;
+  hari: number | null;
+  bulan: number | null;
+  tersedia: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface AvailabilityRuleResponse {
+  id: string;
+  place_id: string;
+  tipe_aturan: AvailabilityRuleType;
+  tanggal_mulai: string;
+  tanggal_selesai: string;
+  hari: number | null;
+  bulan: number | null;
+  tersedia: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateAvailabilityRuleInput {
+  tipe_aturan: AvailabilityRuleType;
+  tanggal_mulai: string;
+  tanggal_selesai: string;
+  hari?: number | null;
+  bulan?: number | null;
+  tersedia?: boolean;
+}
+
+export interface UpdateAvailabilityRuleInput {
+  tipe_aturan?: AvailabilityRuleType;
+  tanggal_mulai?: string;
+  tanggal_selesai?: string;
+  hari?: number | null;
+  bulan?: number | null;
+  tersedia?: boolean;
 }
 
 export interface AvailabilityResult {

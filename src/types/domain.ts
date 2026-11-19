@@ -77,10 +77,10 @@ export type PaymentStatus = (typeof PAYMENT_STATUS)[keyof typeof PAYMENT_STATUS]
 
 /** Metode pembayaran yang tersedia (semua simulasi). SRS KNF-13. */
 export const PAYMENT_METHOD = {
-  SIMULASI: 'SIMULASI',
-  TRANSFER: 'TRANSFER',
-  QRIS: 'QRIS',
-  TUNAI: 'TUNAI',
+  DANA: 'DANA',
+  OVO: 'OVO',
+  GOPAY: 'GOPAY',
+  SHOPEEPAY: 'SHOPEEPAY',
 } as const;
 
 export type PaymentMethod = (typeof PAYMENT_METHOD)[keyof typeof PAYMENT_METHOD];

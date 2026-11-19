@@ -60,11 +60,12 @@ export interface CreateBookingInput {
   tanggal_mulai: string;
   jumlah_durasi: number;
   jenis_usaha: string;
-  tanggal_selesai?: string;
 }
 
 export interface BookingQuery {
   status?: BookingStatus;
+  kode_booking?: string;
+  tanggal_mulai?: string;
   page: number;
   limit: number;
 }

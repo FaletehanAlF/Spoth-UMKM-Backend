@@ -42,7 +42,8 @@ export function uploadImageBuffer(
       {
         folder: cloudinaryConfig.folder,
         resource_type: 'image',
-        // Biarkan Cloudinary menentukan format dari buffer yang dikirim.
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        // Format ditentukan dari magic bytes yang sudah diverifikasi controller.
         format: mimetype.split('/')[1]?.replace('jpeg', 'jpg'),
       },
       (error, result) => {
