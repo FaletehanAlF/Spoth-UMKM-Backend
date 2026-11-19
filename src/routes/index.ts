@@ -10,6 +10,7 @@ import uploadRouter from './upload.route.js';
 import bookingRouter from './booking.route.js';
 import epassRouter from './epass.route.js';
 import paymentRouter from './payment.route.js';
+import categoryRouter from './category.route.js';
 
 const router = Router();
 
@@ -56,5 +57,6 @@ router.use('/uploads', uploadRouter);
 router.use('/bookings', bookingRouter);
 router.use('/epass', epassRouter);
 router.use('/payments', paymentRouter);
+router.use('/categories', categoryRouter);
 
 export default router;
