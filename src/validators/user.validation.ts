@@ -14,6 +14,7 @@ export const updateProfileSchema = z
       .max(100, 'Nama maksimal 100 karakter')
       .optional(),
     no_hp: phoneSchema.optional().or(z.literal('').transform(() => undefined)),
+    foto: z.string().url().optional().or(z.literal('').transform(() => undefined)),
   })
   .strict();
 
