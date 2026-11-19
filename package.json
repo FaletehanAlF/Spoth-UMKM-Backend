@@ -5,6 +5,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test \"tests/**/*.test.ts\"",
     "migrate": "tsx src/database/migrate.ts",
     "seed": "tsx src/database/seed.ts",
     "db:reset": "npm run migrate && npm run seed"

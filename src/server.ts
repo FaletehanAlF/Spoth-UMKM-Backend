@@ -2,12 +2,16 @@ import http from 'node:http';
 
 import app from './app.js';
 import { checkDatabaseConnection, closeDatabasePool } from './config/database.js';
-import { env } from './config/env.js';
+import { env, validateProductionConfig } from './config/env.js';
 import { initSocket } from './config/socket.js';
 
 const port = env.port;
 
 async function start(): Promise<void> {
+  // Fail-fast di production: jika konfigurasi kritis (TLS DB, CORS allowlist,
+  // JWT_SECRET) tidak lengkap, aplikasi ditolak sebelum listen.
+  validateProductionConfig();
+
   try {
     const serverTime = await checkDatabaseConnection();
     console.log(`[database] Connected to PostgreSQL. Server time: ${serverTime.toISOString()}`);
@@ -58,4 +62,7 @@ async function start(): Promise<void> {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
-void start();
+start().catch((error: unknown) => {
+  console.error('[server] Startup failed:', error instanceof Error ? error.message : error);
+  process.exit(1);
+});

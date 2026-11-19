@@ -14,8 +14,19 @@ function buildSslConfig(): PoolConfig['ssl'] {
       rejectUnauthorized: true,
     };
   }
+
+  // Production wajib memverifikasi sertifikat server. Jangan pernah fallback
+  // ke TLS tanpa verifikasi karena membuka peluang man-in-the-middle.
+  if (env.isProduction) {
+    throw new Error(
+      'DB_SSL_CA wajib diisi saat NODE_ENV=production dan DB_SSL=true. ' +
+        'Unduh CA Aiven lalu isi path-nya (lihat README).',
+    );
+  }
+
   console.warn(
-    '[database] DB_SSL_CA is not set. TLS is encrypted but the Aiven CA certificate is not verified.',
+    '[database] DB_SSL_CA is not set. TLS is encrypted but the Aiven CA certificate is not verified. ' +
+      'Set DB_SSL_CA before deploying to production.',
   );
 
   return { rejectUnauthorized: false };

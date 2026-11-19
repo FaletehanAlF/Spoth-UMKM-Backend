@@ -4,6 +4,10 @@ import { uploadImageBuffer } from '../config/cloudinary.js';
 import { sendSuccess } from '../utils/api-response.js';
 import { AppError } from '../utils/app-error.js';
 import { asyncHandler } from '../utils/async-handler.js';
+import {
+  detectImageMime,
+  isImageMimeCompatible,
+} from '../utils/image-signature.js';
 import { getUploadedFile } from '../middlewares/upload.middleware.js';
 
 /**
@@ -25,8 +29,25 @@ export const uploadPhoto = asyncHandler(
       throw new AppError('File gambar wajib diunggah', 400);
     }
 
+    // Validasi isi file, bukan hanya MIME dari client.
+    const detectedMime = detectImageMime(file.buffer);
+
+    if (!detectedMime) {
+      throw new AppError(
+        'Isi file bukan gambar JPG, PNG, atau WEBP yang valid',
+        400,
+      );
+    }
+
+    if (!isImageMimeCompatible(file.mimetype, detectedMime)) {
+      throw new AppError(
+        'Tipe file yang dikirim tidak cocok dengan isi gambar',
+        400,
+      );
+    }
+
     try {
-      const result = await uploadImageBuffer(file.buffer, file.mimetype);
+      const result = await uploadImageBuffer(file.buffer, detectedMime);
 
       sendSuccess(res, 201, 'Gambar berhasil diunggah', {
         secure_url: result.secure_url,
@@ -38,12 +59,14 @@ export const uploadPhoto = asyncHandler(
         nama_file: file.originalname,
       });
     } catch (error) {
-      console.error('[cloudinary] upload failed:', error);
+      // Detail error Cloudinary hanya dicatat di server, client menerima
+      // pesan generik agar tidak membocorkan konfigurasi internal.
+      console.error(
+        '[cloudinary] upload failed:',
+        error instanceof Error ? error.message : 'unknown error',
+      );
 
-      const message =
-        error instanceof Error ? error.message : 'Gagal mengunggah gambar ke Cloudinary';
-
-      throw new AppError(message, 502);
+      throw new AppError('Gagal mengunggah gambar. Silakan coba lagi.', 502);
     }
   },
 );

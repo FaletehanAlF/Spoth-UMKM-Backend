@@ -4,63 +4,163 @@ import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../config/env.js';
 import type { AuthUser } from '../types/express.js';
 import { USER_ROLE, type UserRole } from '../types/domain.js';
-import { AppError } from '../utils/app-error.js';
+import { getUserByTokenSubject } from '../services/auth.service.js';
+import { AppError, unauthorized } from '../utils/app-error.js';
 
 function isUserRole(value: unknown): value is UserRole {
   return value === USER_ROLE.HOST || value === USER_ROLE.TENANT;
 }
 
+interface TokenPayload {
+  sub?: unknown;
+  ver?: unknown;
+}
+
 /**
  * Middleware autentikasi.
- * Membaca token dari header `Authorization: Bearer <token>`, memverifikasi
- * tanda tangannya, lalu memasang data pengguna ke `req.user`.
+ *
+ * Proses:
+ * 1. Parsing header `Authorization: Bearer <token>`
+ * 2. `jwt.verify(token, secret, { algorithms: ['HS256'] })` — melarang
+ *    `alg: none` dan algoritma lain (hardening).
+ * 3. Cek komponen JWT (`sub` string & `ver` angka).
+ * 4. Ambil user dari DB berdasarkan `sub`.
+ * 5. Cek `token_version` user vs `ver` JWT — mismatch → 401.
+ * 6. Role dipakai dari DB (sumber otorisasi yang benar).
+ *
+ * Catatan: user yang sudah dihapus dari DB otomatis ditolak karena
+ * `getUserByTokenSubject` mengembalikan null.
  */
-export const authenticate: RequestHandler = (req, _res, next) => {
+export const authenticate: RequestHandler = async (req, _res, next) => {
   const header = req.headers.authorization;
 
   if (!header || !header.startsWith('Bearer ')) {
-    next(new AppError('Token autentikasi tidak ditemukan', 401));
+    next(unauthorized());
     return;
   }
 
   const token = header.slice('Bearer '.length).trim();
 
   if (!token) {
-    next(new AppError('Token autentikasi tidak ditemukan', 401));
+    next(unauthorized());
     return;
   }
 
   const secret = getJwtSecret();
 
+  let payload: TokenPayload | null = null;
+
   try {
-    const decoded = jwt.verify(token, secret);
+    const verified = jwt.verify(token, secret, { algorithms: ['HS256'] });
 
-    if (
-      typeof decoded === 'string' ||
-      typeof decoded.sub !== 'string' ||
-      typeof decoded.email !== 'string' ||
-      !isUserRole(decoded.role)
-    ) {
-      next(new AppError('Token tidak valid', 401));
-      return;
+    if (typeof verified !== 'string') {
+      payload = verified as TokenPayload;
     }
-
-    const user: AuthUser = {
-      id: decoded.sub,
-      email: decoded.email,
-      role: decoded.role,
-    };
-
-    req.user = user;
-    next();
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
       next(new AppError('Token sudah kedaluwarsa', 401));
       return;
     }
 
+    payload = null;
+  }
+
+  if (!payload || typeof payload.sub !== 'string' || typeof payload.ver !== 'number') {
+    next(new AppError('Token tidak valid', 401));
+    return;
+  }
+
+  try {
+    const user = await getUserByTokenSubject(payload.sub);
+
+    // User tidak ditemukan => ditolak 401 (pesan seragam agar tidak ada
+    // oracle 'user exists' bagi attacker).
+    if (!user) {
+      next(new AppError('Token tidak valid', 401));
+      return;
+    }
+
+    if (user.token_version !== payload.ver) {
+      next(new AppError('Token tidak valid', 401));
+      return;
+    }
+
+    if (!isUserRole(user.role)) {
+      next(new AppError('Token tidak valid', 401));
+      return;
+    }
+
+    const authUser: AuthUser = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    };
+
+    req.user = authUser;
+    next();
+  } catch {
     next(new AppError('Token tidak valid', 401));
   }
+};
+
+/**
+ * Middleware autentikasi OPSIONAL.
+ *
+ * Dipakai pada endpoint publik yang perilakunya berbeda untuk pemilik
+ * (misalnya Host yang membuka detail tempatnya yang masih NONAKTIF).
+ *
+ * - Tanpa header token → lanjut sebagai tamu (`req.user` tidak diisi).
+ * - Token ada tetapi tidak valid/kedaluwarsa → tetap lanjut sebagai tamu,
+ *   supaya token lama di perangkat pengguna tidak merusak akses publik.
+ */
+export const optionalAuthenticate: RequestHandler = async (req, _res, next) => {
+  const header = req.headers.authorization;
+
+  if (!header || !header.startsWith('Bearer ')) {
+    next();
+    return;
+  }
+
+  const token = header.slice('Bearer '.length).trim();
+
+  if (!token) {
+    next();
+    return;
+  }
+
+  try {
+    const verified = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] });
+
+    if (typeof verified === 'string') {
+      next();
+      return;
+    }
+
+    const payload = verified as TokenPayload;
+
+    if (typeof payload.sub !== 'string' || typeof payload.ver !== 'number') {
+      next();
+      return;
+    }
+
+    const user = await getUserByTokenSubject(payload.sub);
+
+    if (
+      user &&
+      user.token_version === payload.ver &&
+      isUserRole(user.role)
+    ) {
+      req.user = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      };
+    }
+  } catch {
+    // Token tidak valid diperlakukan sebagai tamu pada endpoint publik.
+  }
+
+  next();
 };
 
 /**

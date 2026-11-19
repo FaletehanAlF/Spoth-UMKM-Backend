@@ -22,5 +22,7 @@ export interface JwtPayload {
   sub: string;
   email: string;
   role: UserRole;
+  /**Versi token_user untuk pencabutan. Menaikkan token_version saat logout.*/
+  ver: number;
 }
 

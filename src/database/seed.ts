@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import bcrypt from 'bcrypt';
 
 import { closeDatabasePool, pool } from '../config/database.js';
@@ -6,12 +8,45 @@ import { calculatePrice } from '../utils/pricing.js';
 
 /**
  * Mengisi database dengan data contoh (akun, tempat, pemesanan).
- * Jalankan dengan: `npm run seed`
  *
- * Password semua akun contoh: `password123`
+ * Hanya boleh dijalankan dengan flag eksplisit:
+ *   ALLOW_SEED=true npm run seed
+ *
+ * Script ini menolak berjalan di production dan menghapus seluruh data
+ * (TRUNCATE) sebelum mengisi data contoh. Jangan jalankan pada database
+ * yang berisi data nyata.
+ *
+ * Password akun contoh diambil dari `SEED_PASSWORD`, atau dibuat acak dan
+ * TIDAK dicetak ke log. Tidak ada lagi password default yang diketahui publik.
  */
 
-const PASSWORD = 'password123';
+/** Menolak seed pada production atau tanpa flag eksplisit. */
+function assertSeedAllowed(): void {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'Seed ditolak: NODE_ENV=production. Data production tidak boleh dihapus atau diisi data contoh.',
+    );
+  }
+
+  if (process.env.ALLOW_SEED !== 'true') {
+    throw new Error(
+      'Seed ditolak. Jalankan dengan flag eksplisit: ALLOW_SEED=true npm run seed',
+    );
+  }
+}
+
+/** Password akun contoh: dari env, atau acak (tidak pernah dicetak). */
+function resolveSeedPassword(): string {
+  const fromEnv = process.env.SEED_PASSWORD?.trim();
+
+  if (fromEnv) {
+    return fromEnv;
+  }
+
+  return randomBytes(18).toString('base64url');
+}
+
+const PASSWORD = resolveSeedPassword();
 
 interface SeedUser {
   nama: string;
@@ -97,7 +132,9 @@ const PLACES: SeedPlace[] = [
 ];
 
 async function seed(): Promise<void> {
-  console.log('[seed] Membersihkan data lama...');
+  assertSeedAllowed();
+
+  console.log('[seed] ALLOW_SEED=true terdeteksi. Menghapus seluruh data lama...');
 
   await pool.query('TRUNCATE TABLE notifications, payments, bookings, place_images, places, users RESTART IDENTITY CASCADE');
 
@@ -261,7 +298,7 @@ async function seed(): Promise<void> {
   console.log('');
   console.log('[seed] Selesai. Data contoh berhasil dibuat.');
   console.log('');
-  console.log('Akun yang tersedia (password semua: %s)', PASSWORD);
+  console.log('Akun yang tersedia (password mengikuti SEED_PASSWORD atau acak):');
   console.log('  - Host   : host@spoth.test   (Budi Santoso)');
   console.log('  - Host   : host2@spoth.test  (Siti Aminah)');
   console.log('  - Tenant : tenant@spoth.test (Andi Wijaya)');

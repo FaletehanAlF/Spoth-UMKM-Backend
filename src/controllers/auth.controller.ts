@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 
 import { sendSuccess } from '../utils/api-response.js';
 import { asyncHandler } from '../utils/async-handler.js';
-import { loginUser, registerUser } from '../services/auth.service.js';
+import { bumpUserTokenVersion, loginUser, registerUser } from '../services/auth.service.js';
 import type { LoginPayload, RegisterPayload } from '../validators/auth.validation.js';
 
 /**
@@ -33,11 +33,18 @@ export const login = asyncHandler(
 
 /**
  * POST /api/auth/logout
- * Token bersifat stateless, jadi frontend cukup menghapus token yang disimpan.
- * Endpoint ini tetap ada agar alur logout di frontend seragam.
+ * Menaikkan token_version user, sehingga semua sesi user ini tercabut secara
+ * efektif. Panggil dari setiap device yang ingin kenaikan segera; sesi di
+ * device lain dengan versi lama otomatis ditolak sampai user login ulang.
  */
 export const logout = asyncHandler(
-  async (_req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
+    const userId = req.user?.id;
+
+    if (userId) {
+      await bumpUserTokenVersion(userId);
+    }
+
     sendSuccess(res, 200, 'Logout berhasil');
   },
 );

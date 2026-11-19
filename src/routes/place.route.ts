@@ -1,14 +1,17 @@
 import { Router } from 'express';
 
-import { authenticate, authorize } from '../middlewares/auth.middleware.js';
+import { authenticate, authorize, optionalAuthenticate } from '../middlewares/auth.middleware.js';
 import { validateBody, validateParams, validateQuery } from '../middlewares/validate.middleware.js';
 import { USER_ROLE } from '../types/domain.js';
 import { idParamSchema } from '../utils/validators.js';
 import {
+  availabilityRuleParamsSchema,
   availabilitySchema,
+  createAvailabilityRuleSchema,
   createPlaceSchema,
   myPlaceSchema,
   searchPlaceSchema,
+  updateAvailabilityRuleSchema,
   updatePlaceSchema,
 } from '../validators/place.validation.js';
 import {
@@ -21,6 +24,12 @@ import {
   searchPlaces,
   updateExistingPlace,
 } from '../controllers/place.controller.js';
+import {
+  createAvailabilityRule,
+  getAvailabilityRules,
+  removeAvailabilityRule,
+  updateAvailabilityRule,
+} from '../controllers/placeAvailability.controller.js';
 
 const placeRouter = Router();
 
@@ -45,7 +54,7 @@ placeRouter.get(
 // --- Endpoint untuk Tenant (publik) -----------------------------------------
 placeRouter.get('/', validateQuery(searchPlaceSchema), searchPlaces);
 placeRouter.get('/:id/availability', validateParams(idParamSchema), validateQuery(availabilitySchema), getAvailability);
-placeRouter.get('/:id', validateParams(idParamSchema), getPlace);
+placeRouter.get('/:id', optionalAuthenticate, validateParams(idParamSchema), getPlace);
 
 // --- Endpoint tulis khusus Host ---------------------------------------------
 placeRouter.post(
@@ -71,6 +80,42 @@ placeRouter.delete(
   authorize(USER_ROLE.HOST),
   validateParams(idParamSchema),
   removePlace,
+);
+
+// --- Aturan ketersediaan tempat (Host) --------------------------------------
+// Endpoint management: wajib login sebagai HOST dan hanya untuk tempat miliknya.
+placeRouter.get(
+  '/:id/availability-rules',
+  authenticate,
+  authorize(USER_ROLE.HOST),
+  validateParams(idParamSchema),
+  getAvailabilityRules,
+);
+
+placeRouter.post(
+  '/:id/availability-rules',
+  authenticate,
+  authorize(USER_ROLE.HOST),
+  validateParams(idParamSchema),
+  validateBody(createAvailabilityRuleSchema),
+  createAvailabilityRule,
+);
+
+placeRouter.patch(
+  '/:id/availability-rules/:ruleId',
+  authenticate,
+  authorize(USER_ROLE.HOST),
+  validateParams(availabilityRuleParamsSchema),
+  validateBody(updateAvailabilityRuleSchema),
+  updateAvailabilityRule,
+);
+
+placeRouter.delete(
+  '/:id/availability-rules/:ruleId',
+  authenticate,
+  authorize(USER_ROLE.HOST),
+  validateParams(availabilityRuleParamsSchema),
+  removeAvailabilityRule,
 );
 
 export default placeRouter;

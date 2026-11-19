@@ -8,7 +8,7 @@ export interface UpdateProfileInput {
   no_hp?: string;
 }
 
-/** Baris tabel `users` sesuai skema SRS Tabel 4.2. */
+/** Baris tabel `users` sesuai skema SRS Tabel 4.2 + tambahan hardening. */
 export interface UserRow {
   id: string;
   nama: string;
@@ -17,4 +17,6 @@ export interface UserRow {
   no_hp: string | null;
   role: UserRole;
   created_at: Date;
+  /** Versi token pengguna untuk pencabutan sesi (tambahan hardening). */
+  token_version: number;
 }

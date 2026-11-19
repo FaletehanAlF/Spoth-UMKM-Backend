@@ -13,6 +13,10 @@ import { calculatePrice } from '../utils/pricing.js';
 import {
   findScheduleConflicts,
 } from './place.service.js';
+import {
+  getAvailabilityPeriodConflicts,
+} from './availability.logic.js';
+import { findAvailabilityRuleConflicts } from './placeAvailability.service.js';
 import type { PlaceRow } from '../types/place.types.js';
 import { createNotification } from './notification.service.js';
 import type {
@@ -144,7 +148,9 @@ export async function createBooking(
     const placeResult = await client.query<PlaceRow>(
       `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
               alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
-              tipe_durasi, status, created_at, updated_at
+              tipe_durasi, status, created_at, updated_at,
+              tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
+              tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
        FROM places
        WHERE id = $1::integer
        FOR UPDATE`,
@@ -165,11 +171,35 @@ export async function createBooking(
       throw new AppError('Anda tidak bisa menyewa tempat milik Anda sendiri', 400);
     }
 
+    // Batas periode tempat dapat disewa (jika diatur).
     const tanggalSelesai = calculateEndDate(
       input.tanggal_mulai,
       place.tipe_durasi,
       input.jumlah_durasi,
     );
+
+    const periodConflicts = getAvailabilityPeriodConflicts(
+      place,
+      input.tanggal_mulai,
+      tanggalSelesai,
+    );
+
+    if (periodConflicts.length > 0) {
+      throw new AppError('Tanggal sewa berada di luar periode ketersediaan tempat', 400);
+    }
+
+    // Aturan ketersediaan (TANGGAL/HARI/BULAN). Memakai client transaksi yang
+    // sama dengan pengecekan jadwal agar snapshot datanya konsisten.
+    const ruleConflicts = await findAvailabilityRuleConflicts(
+      placeId,
+      input.tanggal_mulai,
+      tanggalSelesai,
+      client,
+    );
+
+    if (ruleConflicts.length > 0) {
+      throw conflict('Jadwal tidak tersedia berdasarkan aturan ketersediaan tempat');
+    }
 
     // Validasi ketersediaan jadwal.
     const konflik = await findScheduleConflicts(
@@ -245,8 +275,12 @@ export async function createBooking(
 
 /**
  * Mengambil satu pemesanan.
- * Tenant hanya boleh melihat pemesanan miliknya, Host hanya pemesanan pada
- * tempatnya sendiri.
+ *
+ * Hardening default-deny: hanya boleh diakses oleh:
+ * - `TENANT` yang merupakan `b.tenant_id`, atau
+ * - `HOST` yang merupakan `p.host_id` (pemilik tempat).
+ *
+ * Role apa pun selain keduanya ditolak 403 (aman untuk tambahan role).
  */
 export async function getBookingById(
   bookingId: string,
@@ -273,12 +307,15 @@ export async function getBookingById(
   const isOwnerTenant = booking.tenant_id === requesterId;
   const isOwnerHost = booking.host_id === requesterId;
 
-  if (requesterRole === 'TENANT' && !isOwnerTenant) {
-    throw forbidden('Anda tidak bisa melihat pemesanan milik pengguna lain');
-  }
+  // Pola default-deny: hanya role TENANT yang menjadi `tenant_id`, atau
+  // role HOST yang menjadi `host_id`, yang boleh membaca. Semua role lain
+  // (seperti role baru di masa depan) tidak dapat mengakses.
+  const isAllowed =
+    (requesterRole === 'TENANT' && isOwnerTenant) ||
+    (requesterRole === 'HOST' && isOwnerHost);
 
-  if (requesterRole === 'HOST' && !isOwnerHost) {
-    throw forbidden('Anda hanya bisa melihat pemesanan pada tempat Anda sendiri');
+  if (!isAllowed) {
+    throw forbidden('Anda tidak diizinkan membaca pemesanan ini');
   }
 
   return toBookingResponse(booking);
@@ -520,7 +557,9 @@ export async function previewPrice(
   const result = await pool.query<PlaceRow>(
     `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
             alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
-            tipe_durasi, status, created_at, updated_at
+            tipe_durasi, status, created_at, updated_at,
+            tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
+            tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
      FROM places
      WHERE id = $1::integer
      LIMIT 1`,
@@ -542,7 +581,12 @@ export async function previewPrice(
   }
 
   const tanggalSelesai = calculateEndDate(tanggalMulai, place.tipe_durasi, jumlahDurasi);
-  const konflik = await findScheduleConflicts(placeId, tanggalMulai, tanggalSelesai);
+
+  const periodConflicts = getAvailabilityPeriodConflicts(place, tanggalMulai, tanggalSelesai);
+  const ruleConflicts = await findAvailabilityRuleConflicts(placeId, tanggalMulai, tanggalSelesai);
+  const scheduleConflicts = await findScheduleConflicts(placeId, tanggalMulai, tanggalSelesai);
+
+  const konflik = [...periodConflicts, ...ruleConflicts, ...scheduleConflicts];
 
   const harga = calculatePrice(
     toNumber(place.harga_normal),
