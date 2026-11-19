@@ -28,6 +28,7 @@ export interface UserRow {
   email: string;
   password_hash: string;
   no_hp: string | null;
+  foto: string | null;
   role: UserRole;
   created_at: Date;
   token_version: number;
@@ -38,6 +39,7 @@ const USER_COLUMNS = `
   nama,
   email,
   no_hp,
+  foto,
   role,
   created_at,
   token_version
@@ -49,6 +51,7 @@ function toUserResponse(row: UserRow): UserResponse {
     nama: row.nama,
     email: row.email,
     no_hp: row.no_hp,
+    foto: row.foto ?? null,
     role: row.role,
     created_at: row.created_at?.toISOString(),
   };

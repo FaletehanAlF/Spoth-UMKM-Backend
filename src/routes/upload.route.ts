@@ -12,7 +12,7 @@ uploadRouter.post(
   '/photo',
   uploadLimiter,
   authenticate,
-  authorize(USER_ROLE.HOST),
+  authorize(USER_ROLE.HOST, USER_ROLE.TENANT),
   uploadImage,
   uploadPhoto,
 );
@@ -22,7 +22,7 @@ uploadRouter.post(
   '/image',
   uploadLimiter,
   authenticate,
-  authorize(USER_ROLE.HOST),
+  authorize(USER_ROLE.HOST, USER_ROLE.TENANT),
   uploadImage,
   uploadPhoto,
 );

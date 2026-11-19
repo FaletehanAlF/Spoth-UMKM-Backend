@@ -101,6 +101,7 @@ export interface UserResponse {
   nama: string;
   email: string;
   no_hp: string | null;
+  foto: string | null;
   role: UserRole;
   created_at?: string;
 }
