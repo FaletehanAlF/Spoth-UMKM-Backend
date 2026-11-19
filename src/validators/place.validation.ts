@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 import {
   DURATION_TYPE,
-  PLACE_CATEGORY,
   PLACE_STATUS,
 } from '../types/domain.js';
 import { MAX_PLACE_IMAGES } from '../config/constants.js';
@@ -55,9 +54,11 @@ export const placeBaseSchema = z.object({
     .trim()
     .min(1, 'Nama tempat wajib diisi')
     .max(150, 'Nama tempat maksimal 150 karakter'),
-  kategori: z.enum(PLACE_CATEGORY, {
-    error: 'Kategori harus LAPAK_USAHA, TERAS_KOMERSIAL, atau BOOTH_EVENT',
-  }),
+  kategori: z
+    .string()
+    .trim()
+    .min(1, 'Kategori wajib dipilih')
+    .max(50, 'Kategori maksimal 50 karakter'),
   deskripsi: z.string().trim().max(2000, 'Deskripsi terlalu panjang').optional(),
   alamat: z
     .string()
@@ -167,7 +168,7 @@ export type UpdatePlacePayload = z.infer<typeof updatePlaceSchema>;
 /** Parameter pencarian & filter tempat (Tenant). */
 export const searchPlaceSchema = paginationQuerySchema.extend({
   keyword: z.string().trim().max(100, 'Kata kunci terlalu panjang').optional(),
-  kategori: z.enum(PLACE_CATEGORY, { error: 'Kategori tidak valid' }).optional(),
+  kategori: z.string().trim().min(1, 'Kategori tidak valid').max(50, 'Kategori maksimal 50 karakter').optional(),
   min_harga: z.coerce
     .number({ error: 'Harga minimum harus berupa angka' })
     .finite('Harga minimum harus berupa angka yang valid')

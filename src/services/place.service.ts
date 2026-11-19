@@ -8,6 +8,7 @@ import { buildPaginatedResult, toOffset, type PaginatedResult } from '../utils/p
 import { getUnitPrice } from '../utils/pricing.js';
 import { getAvailabilityPeriodConflicts, getPlaceStatusConflict } from './availability.logic.js';
 import { findAvailabilityRuleConflicts } from './placeAvailability.service.js';
+import { ensureCategory } from './category.service.js';
 import type {
   AvailabilityResult,
   BookedRange,
@@ -160,6 +161,9 @@ export async function createPlace(
     if (!place) {
       throw new AppError('Gagal menyimpan tempat', 500);
     }
+
+    // Daftarkan kategori (preset/custom) ke master categories agar muncul di dropdown.
+    await ensureCategory(input.kategori, hostId, client);
 
     const foto = input.foto ?? [];
 
@@ -443,6 +447,11 @@ export async function updatePlace(
 
   if (!place) {
     throw notFound('Tempat tidak ditemukan');
+  }
+
+  // Auto-daftar kategori custom ke master categories (bila diubah).
+  if (input.kategori) {
+    await ensureCategory(input.kategori, hostId);
   }
 
   let foto = await getPlacePhotos(placeId);

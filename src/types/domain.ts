@@ -22,7 +22,8 @@ export const PLACE_CATEGORY = {
   BOOTH_EVENT: 'BOOTH_EVENT',
 } as const;
 
-export type PlaceCategory = (typeof PLACE_CATEGORY)[keyof typeof PLACE_CATEGORY];
+/** Tipe kategori tempat (teks bebas, maks. 50 karakter). */
+export type PlaceCategory = string;
 
 export const PLACE_CATEGORIES: PlaceCategory[] = Object.values(PLACE_CATEGORY);
 
