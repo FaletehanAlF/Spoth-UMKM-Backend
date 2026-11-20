@@ -33,9 +33,7 @@ app.use(express.urlencoded({ extended: true }));
 // Pembatas jumlah request untuk seluruh endpoint.
 app.use('/api', apiLimiter);
 
-// Foto tempat disimpan di folder `uploads/` dan diakses sebagai file statis.
-app.use(env.upload.publicPath, express.static(env.upload.dir));
-
+// Root endpoint sederhana untuk pengecekan server.
 app.get('/', (_req: Request, res: Response) => {
   res.json({
     success: true,

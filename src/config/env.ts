@@ -102,10 +102,6 @@ export const env = {
     origins: toCorsOrigins(process.env.CORS_ORIGINS, process.env.NODE_ENV === 'production'),
   },
   trustProxy: toTrustProxy(process.env.TRUST_PROXY),
-  upload: {
-    dir: path.resolve(process.cwd(), process.env.UPLOAD_DIR?.trim() || 'uploads'),
-    publicPath: '/uploads',
-  },
   cloudinary: {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME?.trim() ?? '',
     apiKey: process.env.CLOUDINARY_API_KEY?.trim() ?? '',
