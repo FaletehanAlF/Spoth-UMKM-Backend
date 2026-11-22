@@ -52,7 +52,7 @@ export const placeBaseSchema = z.object({
   nama_tempat: z
     .string()
     .trim()
-    .min(1, 'Nama tempat wajib diisi')
+    .min(5, 'Nama tempat minimal 5 karakter')
     .max(150, 'Nama tempat maksimal 150 karakter'),
   kategori: z
     .string()
@@ -63,9 +63,9 @@ export const placeBaseSchema = z.object({
   alamat: z
     .string()
     .trim()
-    .min(1, 'Alamat wajib diisi')
+    .min(5, 'Alamat minimal 5 karakter')
     .max(255, 'Alamat maksimal 255 karakter'),
-  kota: z.string().trim().min(1, 'Kota wajib diisi').max(80, 'Kota maksimal 80 karakter'),
+  kota: z.string().trim().min(3, 'Kota minimal 3 karakter').max(80, 'Kota maksimal 80 karakter'),
   fasilitas: facilitiesSchema.optional(),
   aturan: z.string().trim().max(2000, 'Aturan terlalu panjang').optional(),
   harga_normal: z
