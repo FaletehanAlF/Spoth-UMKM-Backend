@@ -57,7 +57,7 @@ export const placeBaseSchema = z.object({
   kategori: z
     .string()
     .trim()
-    .min(1, 'Kategori wajib dipilih')
+    .min(2, 'Kategori minimal 2 karakter')
     .max(50, 'Kategori maksimal 50 karakter'),
   deskripsi: z.string().trim().min(10, 'Deskripsi minimal 10 karakter').max(250, 'Deskripsi maksimal 250 karakter'),
   alamat: z

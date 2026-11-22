@@ -10,7 +10,7 @@ export const updateProfileSchema = z
     nama: z
       .string()
       .trim()
-      .min(1, 'Nama wajib diisi')
+      .min(5, 'Nama minimal 5 karakter')
       .max(100, 'Nama maksimal 100 karakter')
       .optional(),
     no_hp: phoneSchema.optional().or(z.literal('').transform(() => undefined)),

@@ -25,7 +25,7 @@ export const createBookingSchema = z
     jenis_usaha: z
       .string()
       .trim()
-      .min(1, 'Jenis usaha wajib diisi')
+      .min(3, 'Jenis usaha minimal 3 karakter')
       .max(100, 'Jenis usaha maksimal 100 karakter'),
   })
   .strict();
