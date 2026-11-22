@@ -12,7 +12,7 @@ export const registerSchema = z
     nama: z
       .string()
       .trim()
-      .min(1, 'Nama wajib diisi')
+      .min(5, 'Nama minimal 5 karakter')
       .max(100, 'Nama maksimal 100 karakter'),
     email: emailSchema,
     password: passwordSchema,
@@ -34,5 +34,3 @@ export const loginSchema = z
   .strict();
 
 export type LoginPayload = z.infer<typeof loginSchema>;
-
-
