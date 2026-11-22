@@ -142,7 +142,7 @@ export async function createPlace(
         hostId,
         input.nama_tempat,
         input.kategori,
-        input.deskripsi ?? null,
+        input.deskripsi,
         input.alamat,
         input.kota,
         input.fasilitas ?? null,

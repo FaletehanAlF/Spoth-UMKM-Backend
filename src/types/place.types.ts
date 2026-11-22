@@ -9,7 +9,7 @@ export interface PlaceRow {
   host_id: string;
   nama_tempat: string;
   kategori: PlaceCategory;
-  deskripsi: string | null;
+  deskripsi: string;
   alamat: string;
   kota: string;
   fasilitas: string | null;
@@ -41,7 +41,7 @@ export interface PlaceResponse {
   host_id: string;
   nama_tempat: string;
   kategori: PlaceCategory;
-  deskripsi: string | null;
+  deskripsi: string;
   alamat: string;
   kota: string;
   fasilitas: string | null;
@@ -88,7 +88,7 @@ export interface PlaceSummaryResponse {
 export interface CreatePlaceInput {
   nama_tempat: string;
   kategori: PlaceCategory;
-  deskripsi?: string;
+  deskripsi: string;
   alamat: string;
   kota: string;
   fasilitas?: string;
