@@ -1,4 +1,4 @@
-import { pool, withTransaction } from '../config/database.js';
+﻿import { pool, withTransaction } from '../config/database.js';
 import { COMMISSION_RATE } from '../config/constants.js';
 import type { Queryable } from '../types/database.js';
 import {
@@ -45,7 +45,7 @@ const BOOKING_COLUMNS = `
   p.nama_tempat           AS nama_tempat,
   p.kategori              AS kategori,
   p.alamat                AS alamat,
-  p.kota                  AS kota,
+  p.kecamatan                  AS kecamatan,
   p.host_id::text         AS host_id,
   tenant.nama             AS nama_tenant,
   host.nama               AS nama_host,
@@ -87,7 +87,7 @@ export function toBookingResponse(row: BookingRow): BookingResponse {
     nama_tempat: row.nama_tempat,
     kategori: row.kategori,
     alamat: row.alamat,
-    kota: row.kota,
+    kecamatan: row.kecamatan,
     nama_tenant: row.nama_tenant,
     nama_host: row.nama_host,
     foto: row.foto ?? [],
@@ -147,7 +147,7 @@ export async function createBooking(
     // Kunci baris tempat: semua pemesanan untuk tempat ini akan berurutan.
     const placeResult = await client.query<PlaceRow>(
       `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-              alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
+              alamat, kecamatan, fasilitas, aturan, harga,
               tipe_durasi, created_at, updated_at,
               tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
               tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
@@ -215,8 +215,7 @@ export async function createBooking(
 
     // Hitung rincian biaya sesuai aturan SRS Subbab 3.3.6.
     const harga = calculatePrice(
-      toNumber(place.harga_normal),
-      place.harga_promo === null ? null : toNumber(place.harga_promo),
+      toNumber(place.harga),
       input.jumlah_durasi,
       COMMISSION_RATE,
     );
@@ -552,7 +551,7 @@ export async function previewPrice(
 
   const result = await pool.query<PlaceRow>(
     `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-            alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
+            alamat, kecamatan, fasilitas, aturan, harga,
             tipe_durasi, created_at, updated_at,
             tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
             tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
@@ -580,12 +579,11 @@ export async function previewPrice(
 
   const konflik = [...periodConflicts, ...ruleConflicts, ...scheduleConflicts];
 
-  const harga = calculatePrice(
-    toNumber(place.harga_normal),
-    place.harga_promo === null ? null : toNumber(place.harga_promo),
-    jumlahDurasi,
-    COMMISSION_RATE,
-  );
+    const harga = calculatePrice(
+      toNumber(place.harga),
+      jumlahDurasi,
+      COMMISSION_RATE,
+    );
 
   return {
     place_id: place.id,
@@ -595,8 +593,6 @@ export async function previewPrice(
     jumlah_durasi: jumlahDurasi,
     tipe_durasi: place.tipe_durasi,
     harga_satuan: harga.harga_satuan,
-    harga_normal: toNumber(place.harga_normal),
-    harga_promo: place.harga_promo === null ? null : toNumber(place.harga_promo),
     total_harga: harga.total_harga,
     komisi_platform: harga.komisi_platform,
     pendapatan_host: harga.pendapatan_host,
@@ -607,3 +603,5 @@ export async function previewPrice(
 
 /** Status pemesanan yang masih memblokir jadwal. */
 export const blockingStatuses = ACTIVE_BOOKING_STATUSES;
+
+

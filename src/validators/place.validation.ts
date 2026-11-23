@@ -1,8 +1,6 @@
-import { z } from 'zod';
+﻿import { z } from 'zod';
 
-import {
-  DURATION_TYPE,
-} from '../types/domain.js';
+import { DURATION_TYPE, PLACE_KECAMATANS } from '../types/domain.js';
 import { MAX_PLACE_IMAGES } from '../config/constants.js';
 import { dateOnlySchema, paginationQuerySchema } from '../utils/validators.js';
 
@@ -28,7 +26,7 @@ const facilitiesSchema = z
  *
  * Hanya dibolehkan URL yang dapat dikembalikan oleh endpoint
  * `/api/uploads/photo` atau URL tamu dari Cloudinary (`https://`).
- * Semua skema `javascript:`, `data:`, `file:` dan lainnya ditolak —
+ * Semua skema `javascript:`, `data:`, `file:` dan lainnya ditolak â€”
  * jika dikirim, `javascript:` akan eksekusi kode saat dibuka di browser.
  */
 const photoUrlSchema = z
@@ -64,18 +62,15 @@ export const placeBaseSchema = z.object({
     .trim()
     .min(10, 'Alamat minimal 10 karakter')
     .max(255, 'Alamat maksimal 255 karakter'),
-  kota: z.string().trim().min(4, 'Kota minimal 4 karakter').max(80, 'Kota maksimal 80 karakter'),
+  kecamatan: z.enum(PLACE_KECAMATANS, {
+    error: 'Kecamatan tempat tidak valid',
+  }),
   fasilitas: facilitiesSchema.optional(),
   aturan: z.string().trim().max(2000, 'Aturan terlalu panjang').optional(),
-  harga_normal: z
-    .number({ error: 'Harga normal harus berupa angka' })
-    .positive('Harga normal harus lebih besar dari 0')
-    .max(9_999_999_999.99, 'Harga normal terlalu besar'),
-  harga_promo: z
-    .number({ error: 'Harga promo harus berupa angka' })
-    .positive('Harga promo harus lebih besar dari 0')
-    .max(9_999_999_999.99, 'Harga promo terlalu besar')
-    .optional(),
+  harga: z
+    .number({ error: 'Harga harus berupa angka' })
+    .positive('Harga harus lebih besar dari 0')
+    .max(9_999_999_999.99, 'Harga terlalu besar'),
   tipe_durasi: z.enum(DURATION_TYPE, {
     error: 'Tipe durasi harus HARIAN, MINGGUAN, atau BULANAN',
   }),
@@ -135,7 +130,6 @@ const hargaRefinement = (
 
 /** Skema tambah tempat (Host). */
 export const createPlaceSchema = placeBaseSchema
-  .superRefine(hargaRefinement)
   .superRefine(availabilityPeriodRefinement)
   .superRefine((value, ctx) => {
     if (!value.foto || value.foto.length === 0) {
@@ -154,18 +148,8 @@ export type CreatePlacePayload = z.infer<typeof createPlaceSchema>;
  */
 export const updatePlaceSchema = placeBaseSchema
   .partial()
-  .extend({
-    harga_promo: z
-      .number({ error: 'Harga promo harus berupa angka' })
-      .positive('Harga promo harus lebih besar dari 0')
-      .max(9_999_999_999.99, 'Harga promo terlalu besar')
-      .nullable()
-      .optional(),
-  })
-  .superRefine(hargaRefinement)
   .superRefine(availabilityPeriodRefinement)
   .superRefine((value, ctx) => {
-    // Foto wajib minimal 1 kalau dikirim; jika tidak dikirim, foto lama tetap ada.
     if (value.foto !== undefined && value.foto !== null && value.foto.length === 0) {
       ctx.addIssue({
         code: 'custom',
@@ -194,7 +178,7 @@ export const searchPlaceSchema = paginationQuerySchema.extend({
     .max(9_999_999_999.99, 'Harga maksimum terlalu besar')
     .optional(),
   tipe_durasi: z.enum(DURATION_TYPE, { error: 'Tipe durasi tidak valid' }).optional(),
-  kota: z.string().trim().max(80, 'Kota terlalu panjang').optional(),
+  kecamatan: z.enum(PLACE_KECAMATANS, { error: 'Kecamatan tempat tidak valid' }).optional(),
   sort: z
     .enum(['terbaru', 'terlama', 'harga_asc', 'harga_desc', 'nama'], {
       error: 'Urutan tidak valid',
@@ -369,3 +353,5 @@ export const availabilityRuleParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
   ruleId: z.coerce.number().int().positive(),
 });
+
+

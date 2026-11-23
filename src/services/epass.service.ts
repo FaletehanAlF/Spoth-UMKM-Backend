@@ -1,4 +1,4 @@
-import { pool } from '../config/database.js';
+﻿import { pool } from '../config/database.js';
 import { BOOKING_STATUS, type BookingStatus } from '../types/domain.js';
 import { forbidden, notFound } from '../utils/app-error.js';
 import { formatDateIndo, formatRupiah } from '../utils/date.js';
@@ -13,7 +13,7 @@ interface EPassRow {
   nama_tempat: string;
   kategori: string;
   alamat: string;
-  kota: string;
+  kecamatan: string;
   jenis_usaha: string;
   tanggal_mulai: string;
   tanggal_selesai: string;
@@ -60,7 +60,7 @@ export async function getEPass(
        p.nama_tempat           AS nama_tempat,
        p.kategori              AS kategori,
        p.alamat                AS alamat,
-       p.kota                  AS kota,
+       p.kecamatan            AS kecamatan,
        b.jenis_usaha           AS jenis_usaha,
        b.tanggal_mulai::text  AS tanggal_mulai,
        b.tanggal_selesai::text AS tanggal_selesai,
@@ -118,7 +118,7 @@ export async function getEPass(
     nama_tempat: row.nama_tempat,
     kategori: row.kategori,
     alamat: row.alamat,
-    kota: row.kota,
+    kecamatan: row.kecamatan,
     foto: row.foto ?? [],
     jenis_usaha: row.jenis_usaha,
     tanggal_mulai: row.tanggal_mulai,
@@ -147,7 +147,7 @@ export function formatEPassText(epass: EPassResponse): string {
     'E-PASS SPOTH UMKM',
     `Kode Booking : ${epass.kode_booking}`,
     `Tempat       : ${epass.nama_tempat}`,
-    `Alamat       : ${epass.alamat}, ${epass.kota}`,
+    `Alamat       : ${epass.alamat}, ${epass.kecamatan}`,
     `Jenis Usaha  : ${epass.jenis_usaha}`,
     `Periode      : ${formatDateIndo(epass.tanggal_mulai)} s.d. ${formatDateIndo(epass.tanggal_selesai)}`,
     `Total Bayar  : ${formatRupiah(epass.total_harga)}`,
@@ -155,3 +155,5 @@ export function formatEPassText(epass: EPassResponse): string {
     `Status       : ${epass.status}`,
   ].join('\n');
 }
+
+

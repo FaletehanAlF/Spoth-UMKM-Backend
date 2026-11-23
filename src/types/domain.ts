@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Domain constants & types shared by every module.
  *
  * Values here follow the SRS (Bab III dan Bab IV) so the database, the API
@@ -37,6 +37,26 @@ export const DURATION_TYPE = {
 export type DurationType = (typeof DURATION_TYPE)[keyof typeof DURATION_TYPE];
 
 export const DURATION_TYPES: DurationType[] = Object.values(DURATION_TYPE);
+
+export const PLACE_KECAMATAN_LABELS = [
+  'Pancoran Mas',
+  'Cimanggis',
+  'Sawangan',
+  'Limo',
+  'Sukmajaya',
+  'Beji',
+  'Cipayung',
+  'Cilodong',
+  'Cinere',
+  'Tapos',
+  'Bojongsari',
+] as const;
+
+export type PlaceKecamatan = (typeof PLACE_KECAMATAN_LABELS)[number];
+
+export const PLACE_KECAMATANS: PlaceKecamatan[] = [
+  ...PLACE_KECAMATAN_LABELS,
+];
 
 /** Status pemesanan. SRS Tabel 3.3 & Tabel 4.5 (kolom `status`). */
 export const BOOKING_STATUS = {
@@ -96,3 +116,4 @@ export interface UserResponse {
   role: UserRole;
   created_at?: string;
 }
+

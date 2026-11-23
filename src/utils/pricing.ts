@@ -11,15 +11,14 @@ export function roundMoney(value: number): number {
 
 /**
  * Harga per satuan sewa.
- * Memakai harga promo bila tersedia, jika tidak memakai harga normal.
- * Aturan: "Harga per satuan = harga promo jika ada, jika tidak ada maka harga normal".
+ * Kini hanya ada satu harga (tidak ada promo), jadi langsung dipakai.
  */
-export function getUnitPrice(hargaNormal: number, hargaPromo: number | null): number {
-  return hargaPromo !== null && hargaPromo > 0 ? hargaPromo : hargaNormal;
+export function getUnitPrice(harga: number): number {
+  return harga;
 }
 
 export interface PriceBreakdown {
-  /** Harga per satuan yang dipakai (promo bila ada). */
+  /** Harga per satuan yang dipakai. */
   harga_satuan: number;
   /** Jumlah durasi sewa. */
   jumlah_durasi: number;
@@ -38,12 +37,11 @@ export interface PriceBreakdown {
  *   Pendapatan Host = Total Harga - Komisi Platform
  */
 export function calculatePrice(
-  hargaNormal: number,
-  hargaPromo: number | null,
+  harga: number,
   jumlahDurasi: number,
   commissionRate = 0.1,
 ): PriceBreakdown {
-  const harga_satuan = getUnitPrice(hargaNormal, hargaPromo);
+  const harga_satuan = harga;
   const total_harga = roundMoney(harga_satuan * jumlahDurasi);
   const komisi_platform = roundMoney(total_harga * commissionRate);
   const pendapatan_host = roundMoney(total_harga - komisi_platform);

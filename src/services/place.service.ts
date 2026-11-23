@@ -1,4 +1,4 @@
-import { pool, withTransaction } from '../config/database.js';
+﻿import { pool, withTransaction } from '../config/database.js';
 import { ACTIVE_BOOKING_STATUSES } from '../types/domain.js';
 import type { Queryable } from '../types/database.js';
 import { AppError, conflict, notFound } from '../utils/app-error.js';
@@ -29,11 +29,10 @@ const PLACE_COLUMNS = `
   p.kategori            AS kategori,
   p.deskripsi           AS deskripsi,
   p.alamat              AS alamat,
-  p.kota                AS kota,
+  p.kecamatan                AS kecamatan,
   p.fasilitas           AS fasilitas,
   p.aturan              AS aturan,
-  p.harga_normal        AS harga_normal,
-  p.harga_promo         AS harga_promo,
+  p.harga                   AS harga,
   p.tipe_durasi         AS tipe_durasi,
   p.created_at          AS created_at,
   p.updated_at          AS updated_at,
@@ -53,8 +52,7 @@ function toNumber(value: string | number | null | undefined): number {
 
 /** Mengubah baris database menjadi bentuk respons API. */
 export function toPlaceResponse(row: PlaceRow, foto: string[] = []): PlaceResponse {
-  const hargaNormal = toNumber(row.harga_normal);
-  const hargaPromo = row.harga_promo === null ? null : toNumber(row.harga_promo);
+  const harga = toNumber(row.harga);
 
   return {
     id: row.id,
@@ -63,7 +61,7 @@ export function toPlaceResponse(row: PlaceRow, foto: string[] = []): PlaceRespon
     kategori: row.kategori,
     deskripsi: row.deskripsi,
     alamat: row.alamat,
-    kota: row.kota,
+    kecamatan: row.kecamatan,
     fasilitas: row.fasilitas,
     fasilitas_list: row.fasilitas
       ? row.fasilitas
@@ -72,9 +70,7 @@ export function toPlaceResponse(row: PlaceRow, foto: string[] = []): PlaceRespon
           .filter((item) => item.length > 0)
       : [],
     aturan: row.aturan,
-    harga_normal: hargaNormal,
-    harga_promo: hargaPromo,
-    harga_efektif: getUnitPrice(hargaNormal, hargaPromo),
+    harga,
     tipe_durasi: row.tipe_durasi,
     created_at: row.created_at?.toISOString(),
     updated_at: row.updated_at?.toISOString(),
@@ -125,13 +121,13 @@ export async function createPlace(
   return withTransaction(async (client) => {
     const result = await client.query<PlaceRow>(
       `INSERT INTO places (
-         host_id, nama_tempat, kategori, deskripsi, alamat, kota,
-         fasilitas, aturan, harga_normal, harga_promo, tipe_durasi,
+         host_id, nama_tempat, kategori, deskripsi, alamat, kecamatan,
+         fasilitas, aturan, harga, tipe_durasi,
          tanggal_mulai_tersedia, tanggal_selesai_tersedia
        )
-       VALUES ($1::integer, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::date, $13::date)
+       VALUES ($1::integer, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::date, $12::date)
        RETURNING id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-                 alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
+                 alamat, kecamatan, fasilitas, aturan, harga,
                  tipe_durasi, created_at, updated_at,
                  tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
                  tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia`,
@@ -141,11 +137,10 @@ export async function createPlace(
         input.kategori,
         input.deskripsi,
         input.alamat,
-        input.kota,
+        input.kecamatan,
         input.fasilitas ?? null,
         input.aturan ?? null,
-        input.harga_normal,
-        input.harga_promo ?? null,
+        input.harga,
         input.tipe_durasi,
         input.tanggal_mulai_tersedia ?? null,
         input.tanggal_selesai_tersedia ?? null,
@@ -189,7 +184,7 @@ export async function listPlaces(query: SearchPlaceQuery): Promise<PaginatedResu
     conditions.push(
       `(p.nama_tempat ILIKE ${param}
         OR COALESCE(p.deskripsi, '') ILIKE ${param}
-        OR p.kota ILIKE ${param}
+        OR p.kecamatan ILIKE ${param}
         OR COALESCE(p.fasilitas, '') ILIKE ${param}
         OR COALESCE(p.aturan, '') ILIKE ${param})`,
     );
@@ -203,19 +198,19 @@ export async function listPlaces(query: SearchPlaceQuery): Promise<PaginatedResu
     conditions.push(`p.tipe_durasi = ${addValue(query.tipe_durasi)}`);
   }
 
-  if (query.kota) {
-    conditions.push(`p.kota ILIKE ${addValue(`%${query.kota}%`)}`);
+  if (query.kecamatan) {
+    conditions.push(`p.kecamatan ILIKE ${addValue(`%${query.kecamatan}%`)}`);
   }
 
   // Filter harga memakai harga efektif (promo bila ada, selain itu normal).
-  const hargaEfektif = 'COALESCE(p.harga_promo, p.harga_normal)';
+  const harga = 'p.harga';
 
   if (query.min_harga !== undefined) {
-    conditions.push(`${hargaEfektif} >= ${addValue(query.min_harga)}`);
+    conditions.push(`${harga} >= ${addValue(query.min_harga)}`);
   }
 
   if (query.max_harga !== undefined) {
-    conditions.push(`${hargaEfektif} <= ${addValue(query.max_harga)}`);
+    conditions.push(`${harga} <= ${addValue(query.max_harga)}`);
   }
 
   // Tanpa filter, kondisi kosong diganti TRUE agar query tetap valid.
@@ -224,8 +219,8 @@ export async function listPlaces(query: SearchPlaceQuery): Promise<PaginatedResu
   const orderByMap: Record<NonNullable<SearchPlaceQuery['sort']>, string> = {
     terbaru: 'p.created_at DESC, p.id DESC',
     terlama: 'p.created_at ASC, p.id ASC',
-    harga_asc: `${hargaEfektif} ASC, p.id DESC`,
-    harga_desc: `${hargaEfektif} DESC, p.id DESC`,
+    harga_asc: `${harga} ASC, p.id DESC`,
+    harga_desc: `${harga} DESC, p.id DESC`,
     nama: 'p.nama_tempat ASC',
   };
 
@@ -357,42 +352,24 @@ export async function updatePlace(
   input: UpdatePlaceInput,
 ): Promise<PlaceResponse> {
   const current = await assertPlaceOwnedBy(placeId, hostId);
-
-  // Harga promo tidak boleh melebihi harga normal. Bila `harga_normal` tidak
-  // ikut dikirim pada request, pembandingannya memakai harga normal yang
-  // tersimpan di database.
-  if (input.harga_promo !== undefined && input.harga_promo !== null) {
-    const hargaNormal = input.harga_normal ?? toNumber(current.harga_normal);
-
-    if (input.harga_promo > hargaNormal) {
-      throw new AppError('Harga promo tidak boleh lebih besar dari harga normal', 400, [
-        {
-          field: 'harga_promo',
-          message: 'Harga promo tidak boleh lebih besar dari harga normal',
-        },
-      ]);
-    }
-  }
-
   const result = await pool.query<PlaceRow>(
     `UPDATE places
      SET nama_tempat  = COALESCE($3, nama_tempat),
          kategori     = COALESCE($4, kategori),
          deskripsi    = COALESCE($5, deskripsi),
          alamat       = COALESCE($6, alamat),
-         kota         = COALESCE($7, kota),
+         kecamatan    = COALESCE($7, kecamatan),
          fasilitas    = COALESCE($8, fasilitas),
          aturan       = COALESCE($9, aturan),
-         harga_normal = COALESCE($10, harga_normal),
-         harga_promo  = CASE WHEN $11::boolean THEN $12 ELSE harga_promo END,
-         tipe_durasi  = COALESCE($13, tipe_durasi),
-         tanggal_mulai_tersedia   = CASE WHEN $14::boolean THEN $15::date ELSE tanggal_mulai_tersedia END,
-         tanggal_selesai_tersedia = CASE WHEN $16::boolean THEN $17::date ELSE tanggal_selesai_tersedia END,
+         harga        = COALESCE($10, harga),
+         tipe_durasi  = COALESCE($11, tipe_durasi),
+         tanggal_mulai_tersedia   = CASE WHEN $12::boolean THEN $13::date ELSE tanggal_mulai_tersedia END,
+         tanggal_selesai_tersedia = CASE WHEN $14::boolean THEN $15::date ELSE tanggal_selesai_tersedia END,
          updated_at   = NOW()
      WHERE id = $1::integer AND host_id = $2::integer
      RETURNING id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-               alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
-               tipe_durasi, created_at, updated_at,
+               alamat, kecamatan, fasilitas, aturan, harga, tipe_durasi,
+               created_at, updated_at,
                tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
                tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia`,
     [
@@ -402,12 +379,10 @@ export async function updatePlace(
       input.kategori ?? null,
       input.deskripsi ?? null,
       input.alamat ?? null,
-      input.kota ?? null,
+      input.kecamatan ?? null,
       input.fasilitas ?? null,
       input.aturan ?? null,
-      input.harga_normal ?? null,
-      input.harga_promo !== undefined,
-      input.harga_promo ?? null,
+      input.harga ?? null,
       input.tipe_durasi ?? null,
       input.tanggal_mulai_tersedia !== undefined,
       input.tanggal_mulai_tersedia ?? null,
@@ -469,7 +444,7 @@ export async function deletePlace(placeId: string, hostId: string): Promise<void
 export async function assertPlaceOwnedBy(placeId: string, hostId: string): Promise<PlaceRow> {
   const result = await pool.query<PlaceRow>(
     `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-            alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
+            alamat, kecamatan, fasilitas, aturan, harga,
             tipe_durasi, created_at, updated_at,
              tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
              tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
@@ -632,3 +607,8 @@ export async function getHostSummary(hostId: string): Promise<PlaceSummaryRespon
     })),
   };
 }
+
+
+
+
+

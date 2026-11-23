@@ -1,6 +1,7 @@
-import type {
+﻿import type {
   DurationType,
   PlaceCategory,
+  PlaceKecamatan,
 } from './domain.js';
 
 export interface PlaceRow {
@@ -10,11 +11,10 @@ export interface PlaceRow {
   kategori: PlaceCategory;
   deskripsi: string;
   alamat: string;
-  kota: string;
+  kecamatan: PlaceKecamatan;
   fasilitas: string | null;
   aturan: string | null;
-  harga_normal: string;
-  harga_promo: string | null;
+  harga: string;
   tipe_durasi: DurationType;
   created_at: Date;
   updated_at: Date;
@@ -23,8 +23,6 @@ export interface PlaceRow {
   tanggal_selesai_tersedia: string | null;
   /** Nama host, diambil dari tabel `users`. */
   nama_host?: string;
-  /** Harga yang benar-benar dipakai (promo bila ada). */
-  harga_efektif?: string;
   /** Jumlah foto tempat. */
   jumlah_foto?: string;
 }
@@ -41,13 +39,11 @@ export interface PlaceResponse {
   kategori: PlaceCategory;
   deskripsi: string;
   alamat: string;
-  kota: string;
+  kecamatan: PlaceKecamatan;
   fasilitas: string | null;
   fasilitas_list: string[];
   aturan: string | null;
-  harga_normal: number;
-  harga_promo: number | null;
-  harga_efektif: number;
+  harga: number;
   tipe_durasi: DurationType;
   created_at: string;
   updated_at: string;
@@ -95,11 +91,10 @@ export interface CreatePlaceInput {
   kategori: PlaceCategory;
   deskripsi: string;
   alamat: string;
-  kota: string;
+  kecamatan: PlaceKecamatan;
   fasilitas?: string;
   aturan?: string;
-  harga_normal: number;
-  harga_promo?: number;
+  harga: number;
   tipe_durasi: DurationType;
   tanggal_mulai_tersedia?: string | null;
   tanggal_selesai_tersedia?: string | null;
@@ -111,11 +106,10 @@ export interface UpdatePlaceInput {
   kategori?: PlaceCategory;
   deskripsi?: string;
   alamat?: string;
-  kota?: string;
+  kecamatan?: PlaceKecamatan;
   fasilitas?: string;
   aturan?: string;
-  harga_normal?: number;
-  harga_promo?: number | null;
+  harga?: number;
   tipe_durasi?: DurationType;
   tanggal_mulai_tersedia?: string | null;
   tanggal_selesai_tersedia?: string | null;
@@ -128,7 +122,7 @@ export interface SearchPlaceQuery {
   min_harga?: number;
   max_harga?: number;
   tipe_durasi?: DurationType;
-  kota?: string;
+  kecamatan?: PlaceKecamatan;
   sort?: 'terbaru' | 'terlama' | 'harga_asc' | 'harga_desc' | 'nama';
   page: number;
   limit: number;
@@ -199,3 +193,6 @@ export interface AvailabilityResult {
   jumlah_durasi: number;
   konflik: BookedRange[];
 }
+
+
+

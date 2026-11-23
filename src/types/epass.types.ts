@@ -1,11 +1,11 @@
-import type { BookingStatus } from './domain.js';
+﻿import type { BookingStatus } from './domain.js';
 
 export interface EPassResponse {
   kode_booking: string;
   nama_tempat: string;
   kategori: string;
   alamat: string;
-  kota: string;
+  kecamatan: string;
   foto: string[];
   jenis_usaha: string;
   tanggal_mulai: string;
@@ -23,3 +23,5 @@ export interface EPassResponse {
   tanggal_pembayaran: string | null;
   dibuat_pada: string;
 }
+
+
