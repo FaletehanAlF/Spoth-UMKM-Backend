@@ -13,9 +13,6 @@ import type { AvailabilityRuleRow, BookedRange } from '../types/place.types.js';
  * pemesanan SELALU memakai aturan yang sama.
  */
 
-/** Status konflik untuk tempat yang sedang NONAKTIF. */
-export const CONFLICT_STATUS_TIDAK_AKTIF = 'STATUS_TIDAK_AKTIF';
-
 /** Status konflik untuk tanggal di luar periode ketersediaan tempat. */
 export const CONFLICT_STATUS_PERIODE = 'PERIODE_TIDAK_TERSEDIA';
 
@@ -117,24 +114,4 @@ export function getAvailabilityPeriodConflicts(
   }
 
   return conflicts;
-}
-
-/**
- * Konflik karena tempat tidak berstatus AKTIF.
- * Tempat NONAKTIF tidak boleh dinyatakan tersedia oleh endpoint mana pun.
- */
-export function getPlaceStatusConflict(
-  status: string,
-  tanggalMulai: string,
-  tanggalSelesai: string,
-): BookedRange | null {
-  if (status === 'AKTIF') {
-    return null;
-  }
-
-  return {
-    tanggal_mulai: tanggalMulai,
-    tanggal_selesai: tanggalSelesai,
-    status: CONFLICT_STATUS_TIDAK_AKTIF,
-  };
 }

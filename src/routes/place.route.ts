@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { authenticate, authorize, optionalAuthenticate } from '../middlewares/auth.middleware.js';
+import { authenticate, authorize } from '../middlewares/auth.middleware.js';
 import { validateBody, validateParams, validateQuery } from '../middlewares/validate.middleware.js';
 import { USER_ROLE } from '../types/domain.js';
 import { idParamSchema } from '../utils/validators.js';
@@ -54,7 +54,7 @@ placeRouter.get(
 // --- Endpoint untuk Tenant (publik) -----------------------------------------
 placeRouter.get('/', validateQuery(searchPlaceSchema), searchPlaces);
 placeRouter.get('/:id/availability', validateParams(idParamSchema), validateQuery(availabilitySchema), getAvailability);
-placeRouter.get('/:id', optionalAuthenticate, validateParams(idParamSchema), getPlace);
+placeRouter.get('/:id', validateParams(idParamSchema), getPlace);
 
 // --- Endpoint tulis khusus Host ---------------------------------------------
 placeRouter.post(

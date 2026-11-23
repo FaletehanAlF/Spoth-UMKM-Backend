@@ -1,7 +1,6 @@
 import type {
   DurationType,
   PlaceCategory,
-  PlaceStatus,
 } from './domain.js';
 
 export interface PlaceRow {
@@ -17,7 +16,6 @@ export interface PlaceRow {
   harga_normal: string;
   harga_promo: string | null;
   tipe_durasi: DurationType;
-  status: PlaceStatus;
   created_at: Date;
   updated_at: Date;
   /** Batas periode tempat dapat disewa (opsional). */
@@ -51,7 +49,6 @@ export interface PlaceResponse {
   harga_promo: number | null;
   harga_efektif: number;
   tipe_durasi: DurationType;
-  status: PlaceStatus;
   created_at: string;
   updated_at: string;
   tanggal_mulai_tersedia: string | null;
@@ -75,14 +72,22 @@ export interface PlaceDetailResponse extends PlaceResponse {
   total_pendapatan?: number;
 }
 
+/** Pendapatan bersih host pada satu bulan (untuk grafik dashboard). */
+export interface MonthlyRevenue {
+  /** Format YYYY-MM, contoh "2026-06". */
+  bulan: string;
+  pendapatan: number;
+}
+
 export interface PlaceSummaryResponse {
   total_tempat: number;
-  tempat_aktif: number;
   total_pemesanan: number;
   pemesanan_menunggu: number;
   pemesanan_lunas: number;
   total_pendapatan: number;
   total_komisi: number;
+  /** Pendapatan bersih per bulan dari semua aktivitas pemesanan lunas. */
+  pendapatan_bulanan: MonthlyRevenue[];
 }
 
 export interface CreatePlaceInput {
@@ -96,7 +101,6 @@ export interface CreatePlaceInput {
   harga_normal: number;
   harga_promo?: number;
   tipe_durasi: DurationType;
-  status?: PlaceStatus;
   tanggal_mulai_tersedia?: string | null;
   tanggal_selesai_tersedia?: string | null;
   foto?: string[];
@@ -113,7 +117,6 @@ export interface UpdatePlaceInput {
   harga_normal?: number;
   harga_promo?: number | null;
   tipe_durasi?: DurationType;
-  status?: PlaceStatus;
   tanggal_mulai_tersedia?: string | null;
   tanggal_selesai_tersedia?: string | null;
   foto?: string[];
@@ -133,7 +136,6 @@ export interface SearchPlaceQuery {
 
 export interface MyPlaceQuery {
   keyword?: string;
-  status?: PlaceStatus;
   page: number;
   limit: number;
 }

@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 import {
   DURATION_TYPE,
-  PLACE_STATUS,
 } from '../types/domain.js';
 import { MAX_PLACE_IMAGES } from '../config/constants.js';
 import { dateOnlySchema, paginationQuerySchema } from '../utils/validators.js';
@@ -57,15 +56,15 @@ export const placeBaseSchema = z.object({
   kategori: z
     .string()
     .trim()
-    .min(2, 'Kategori minimal 2 karakter')
+    .min(5, 'Kategori minimal 5 karakter')
     .max(50, 'Kategori maksimal 50 karakter'),
   deskripsi: z.string().trim().min(10, 'Deskripsi minimal 10 karakter').max(250, 'Deskripsi maksimal 250 karakter'),
   alamat: z
     .string()
     .trim()
-    .min(5, 'Alamat minimal 5 karakter')
+    .min(10, 'Alamat minimal 10 karakter')
     .max(255, 'Alamat maksimal 255 karakter'),
-  kota: z.string().trim().min(3, 'Kota minimal 3 karakter').max(80, 'Kota maksimal 80 karakter'),
+  kota: z.string().trim().min(4, 'Kota minimal 4 karakter').max(80, 'Kota maksimal 80 karakter'),
   fasilitas: facilitiesSchema.optional(),
   aturan: z.string().trim().max(2000, 'Aturan terlalu panjang').optional(),
   harga_normal: z
@@ -80,9 +79,6 @@ export const placeBaseSchema = z.object({
   tipe_durasi: z.enum(DURATION_TYPE, {
     error: 'Tipe durasi harus HARIAN, MINGGUAN, atau BULANAN',
   }),
-  status: z.enum(PLACE_STATUS, {
-    error: 'Status harus AKTIF atau NONAKTIF',
-  }).optional(),
   tanggal_mulai_tersedia: dateOnlySchema.optional().nullable(),
   tanggal_selesai_tersedia: dateOnlySchema.optional().nullable(),
   foto: z
@@ -139,11 +135,17 @@ const hargaRefinement = (
 
 /** Skema tambah tempat (Host). */
 export const createPlaceSchema = placeBaseSchema
-  .extend({
-    status: placeBaseSchema.shape.status?.default('AKTIF'),
-  })
   .superRefine(hargaRefinement)
-  .superRefine(availabilityPeriodRefinement);
+  .superRefine(availabilityPeriodRefinement)
+  .superRefine((value, ctx) => {
+    if (!value.foto || value.foto.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['foto'],
+        message: 'Silakan masukkan minimal 1 foto.',
+      });
+    }
+  });
 
 export type CreatePlacePayload = z.infer<typeof createPlaceSchema>;
 
@@ -161,7 +163,17 @@ export const updatePlaceSchema = placeBaseSchema
       .optional(),
   })
   .superRefine(hargaRefinement)
-  .superRefine(availabilityPeriodRefinement);
+  .superRefine(availabilityPeriodRefinement)
+  .superRefine((value, ctx) => {
+    // Foto wajib minimal 1 kalau dikirim; jika tidak dikirim, foto lama tetap ada.
+    if (value.foto !== undefined && value.foto !== null && value.foto.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['foto'],
+        message: 'Silakan masukkan minimal 1 foto.',
+      });
+    }
+  });
 
 export type UpdatePlacePayload = z.infer<typeof updatePlaceSchema>;
 
@@ -195,7 +207,6 @@ export type SearchPlacePayload = z.infer<typeof searchPlaceSchema>;
 /** Parameter daftar tempat milik Host. */
 export const myPlaceSchema = paginationQuerySchema.extend({
   keyword: z.string().trim().max(100, 'Kata kunci terlalu panjang').optional(),
-  status: z.enum(PLACE_STATUS, { error: 'Status tidak valid' }).optional(),
 });
 
 export type MyPlacePayload = z.infer<typeof myPlaceSchema>;

@@ -38,16 +38,6 @@ export type DurationType = (typeof DURATION_TYPE)[keyof typeof DURATION_TYPE];
 
 export const DURATION_TYPES: DurationType[] = Object.values(DURATION_TYPE);
 
-/** Status tempat. SRS Tabel 4.3 (kolom `status`). */
-export const PLACE_STATUS = {
-  AKTIF: 'AKTIF',
-  NONAKTIF: 'NONAKTIF',
-} as const;
-
-export type PlaceStatus = (typeof PLACE_STATUS)[keyof typeof PLACE_STATUS];
-
-export const PLACE_STATUSES: PlaceStatus[] = Object.values(PLACE_STATUS);
-
 /** Status pemesanan. SRS Tabel 3.3 & Tabel 4.5 (kolom `status`). */
 export const BOOKING_STATUS = {
   MENUNGGU_PEMBAYARAN: 'MENUNGGU_PEMBAYARAN',

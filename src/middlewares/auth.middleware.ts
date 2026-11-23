@@ -104,66 +104,6 @@ export const authenticate: RequestHandler = async (req, _res, next) => {
 };
 
 /**
- * Middleware autentikasi OPSIONAL.
- *
- * Dipakai pada endpoint publik yang perilakunya berbeda untuk pemilik
- * (misalnya Host yang membuka detail tempatnya yang masih NONAKTIF).
- *
- * - Tanpa header token → lanjut sebagai tamu (`req.user` tidak diisi).
- * - Token ada tetapi tidak valid/kedaluwarsa → tetap lanjut sebagai tamu,
- *   supaya token lama di perangkat pengguna tidak merusak akses publik.
- */
-export const optionalAuthenticate: RequestHandler = async (req, _res, next) => {
-  const header = req.headers.authorization;
-
-  if (!header || !header.startsWith('Bearer ')) {
-    next();
-    return;
-  }
-
-  const token = header.slice('Bearer '.length).trim();
-
-  if (!token) {
-    next();
-    return;
-  }
-
-  try {
-    const verified = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] });
-
-    if (typeof verified === 'string') {
-      next();
-      return;
-    }
-
-    const payload = verified as TokenPayload;
-
-    if (typeof payload.sub !== 'string' || typeof payload.ver !== 'number') {
-      next();
-      return;
-    }
-
-    const user = await getUserByTokenSubject(payload.sub);
-
-    if (
-      user &&
-      user.token_version === payload.ver &&
-      isUserRole(user.role)
-    ) {
-      req.user = {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-      };
-    }
-  } catch {
-    // Token tidak valid diperlakukan sebagai tamu pada endpoint publik.
-  }
-
-  next();
-};
-
-/**
  * Middleware pembatasan akses berdasarkan peran.
  *
  * Contoh pemakaian pada modul places (khusus Host):

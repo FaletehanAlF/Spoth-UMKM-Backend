@@ -1,12 +1,11 @@
 import { pool, withTransaction } from '../config/database.js';
-import { ACTIVE_BOOKING_STATUSES, type UserRole } from '../types/domain.js';
+import { ACTIVE_BOOKING_STATUSES } from '../types/domain.js';
 import type { Queryable } from '../types/database.js';
 import { AppError, conflict, notFound } from '../utils/app-error.js';
-import { canViewPlace } from '../utils/access-control.js';
 import { calculateEndDate, today } from '../utils/date.js';
 import { buildPaginatedResult, toOffset, type PaginatedResult } from '../utils/pagination.js';
 import { getUnitPrice } from '../utils/pricing.js';
-import { getAvailabilityPeriodConflicts, getPlaceStatusConflict } from './availability.logic.js';
+import { getAvailabilityPeriodConflicts } from './availability.logic.js';
 import { findAvailabilityRuleConflicts } from './placeAvailability.service.js';
 import { ensureCategory } from './category.service.js';
 import type {
@@ -36,7 +35,6 @@ const PLACE_COLUMNS = `
   p.harga_normal        AS harga_normal,
   p.harga_promo         AS harga_promo,
   p.tipe_durasi         AS tipe_durasi,
-  p.status              AS status,
   p.created_at          AS created_at,
   p.updated_at          AS updated_at,
   p.tanggal_mulai_tersedia::text    AS tanggal_mulai_tersedia,
@@ -78,7 +76,6 @@ export function toPlaceResponse(row: PlaceRow, foto: string[] = []): PlaceRespon
     harga_promo: hargaPromo,
     harga_efektif: getUnitPrice(hargaNormal, hargaPromo),
     tipe_durasi: row.tipe_durasi,
-    status: row.status,
     created_at: row.created_at?.toISOString(),
     updated_at: row.updated_at?.toISOString(),
     tanggal_mulai_tersedia: row.tanggal_mulai_tersedia ?? null,
@@ -129,13 +126,13 @@ export async function createPlace(
     const result = await client.query<PlaceRow>(
       `INSERT INTO places (
          host_id, nama_tempat, kategori, deskripsi, alamat, kota,
-         fasilitas, aturan, harga_normal, harga_promo, tipe_durasi, status,
+         fasilitas, aturan, harga_normal, harga_promo, tipe_durasi,
          tanggal_mulai_tersedia, tanggal_selesai_tersedia
        )
-       VALUES ($1::integer, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::date, $14::date)
+       VALUES ($1::integer, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::date, $13::date)
        RETURNING id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
                  alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
-                 tipe_durasi, status, created_at, updated_at,
+                 tipe_durasi, created_at, updated_at,
                  tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
                  tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia`,
       [
@@ -150,7 +147,6 @@ export async function createPlace(
         input.harga_normal,
         input.harga_promo ?? null,
         input.tipe_durasi,
-        input.status ?? 'AKTIF',
         input.tanggal_mulai_tersedia ?? null,
         input.tanggal_selesai_tersedia ?? null,
       ],
@@ -177,10 +173,10 @@ export async function createPlace(
 
 /**
  * Mencari dan memfilter tempat (SRS Tabel 3.1 Fitur "Pencarian Tempat" dan
- * "Filter Tempat"). Hanya tempat berstatus AKTIF yang ditampilkan ke Tenant.
+ * "Filter Tempat").
  */
 export async function listPlaces(query: SearchPlaceQuery): Promise<PaginatedResult<PlaceResponse>> {
-  const conditions: string[] = ["p.status = 'AKTIF'"];
+  const conditions: string[] = [];
   const values: unknown[] = [];
   const addValue = (value: unknown): string => {
     values.push(value);
@@ -222,7 +218,8 @@ export async function listPlaces(query: SearchPlaceQuery): Promise<PaginatedResu
     conditions.push(`${hargaEfektif} <= ${addValue(query.max_harga)}`);
   }
 
-  const whereClause = conditions.join(' AND ');
+  // Tanpa filter, kondisi kosong diganti TRUE agar query tetap valid.
+  const whereClause = conditions.length === 0 ? 'TRUE' : conditions.join(' AND ');
 
   const orderByMap: Record<NonNullable<SearchPlaceQuery['sort']>, string> = {
     terbaru: 'p.created_at DESC, p.id DESC',
@@ -274,11 +271,6 @@ export async function listMyPlaces(
     );
   }
 
-  if (query.status) {
-    values.push(query.status);
-    conditions.push(`p.status = $${values.length}`);
-  }
-
   const whereClause = conditions.join(' AND ');
 
   const countResult = await pool.query<{ total: string }>(
@@ -310,17 +302,8 @@ export async function listMyPlaces(
   return buildPaginatedResult(items, total, query.page, query.limit);
 }
 
-/**
- * Mengambil detail satu tempat.
- *
- * Akses publik hanya untuk tempat berstatus AKTIF. Host pemilik tetap bisa
- * melihat tempatnya yang NONAKTIF (misalnya untuk pratinjau/edit) dengan
- * mengirim token pada request yang sama.
- */
-export async function getPlaceDetail(
-  placeId: string,
-  requester?: { id: string; role: UserRole },
-): Promise<PlaceDetailResponse> {
+/** Mengambil detail satu tempat. */
+export async function getPlaceDetail(placeId: string): Promise<PlaceDetailResponse> {
   const result = await pool.query<PlaceRow>(
     `SELECT ${PLACE_COLUMNS}
      FROM places p
@@ -333,14 +316,6 @@ export async function getPlaceDetail(
   const place = result.rows[0];
 
   if (!place) {
-    throw notFound('Tempat tidak ditemukan');
-  }
-
-  const isVisible = canViewPlace(place.status, place.host_id, requester);
-
-  // Tempat NONAKTIF tidak boleh terlihat publik. Respons dibuat sama dengan
-  // tempat yang tidak ada agar tidak membocorkan keberadaan data.
-  if (!isVisible) {
     throw notFound('Tempat tidak ditemukan');
   }
 
@@ -411,14 +386,13 @@ export async function updatePlace(
          harga_normal = COALESCE($10, harga_normal),
          harga_promo  = CASE WHEN $11::boolean THEN $12 ELSE harga_promo END,
          tipe_durasi  = COALESCE($13, tipe_durasi),
-         status       = COALESCE($14, status),
-         tanggal_mulai_tersedia   = CASE WHEN $15::boolean THEN $16::date ELSE tanggal_mulai_tersedia END,
-         tanggal_selesai_tersedia = CASE WHEN $17::boolean THEN $18::date ELSE tanggal_selesai_tersedia END,
+         tanggal_mulai_tersedia   = CASE WHEN $14::boolean THEN $15::date ELSE tanggal_mulai_tersedia END,
+         tanggal_selesai_tersedia = CASE WHEN $16::boolean THEN $17::date ELSE tanggal_selesai_tersedia END,
          updated_at   = NOW()
      WHERE id = $1::integer AND host_id = $2::integer
      RETURNING id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
                alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
-               tipe_durasi, status, created_at, updated_at,
+               tipe_durasi, created_at, updated_at,
                tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
                tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia`,
     [
@@ -435,7 +409,6 @@ export async function updatePlace(
       input.harga_promo !== undefined,
       input.harga_promo ?? null,
       input.tipe_durasi ?? null,
-      input.status ?? null,
       input.tanggal_mulai_tersedia !== undefined,
       input.tanggal_mulai_tersedia ?? null,
       input.tanggal_selesai_tersedia !== undefined,
@@ -497,7 +470,7 @@ export async function assertPlaceOwnedBy(placeId: string, hostId: string): Promi
   const result = await pool.query<PlaceRow>(
     `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
             alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
-            tipe_durasi, status, created_at, updated_at,
+            tipe_durasi, created_at, updated_at,
              tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
              tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
      FROM places
@@ -565,7 +538,7 @@ export async function checkAvailability(
   }
 
   const place = await pool.query<PlaceRow>(
-    `SELECT id::text AS id, status, tipe_durasi,
+    `SELECT id::text AS id, tipe_durasi,
             tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
             tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
      FROM places WHERE id = $1::integer LIMIT 1`,
@@ -580,14 +553,11 @@ export async function checkAvailability(
 
   const tanggalSelesai = calculateEndDate(tanggalMulai, row.tipe_durasi, jumlahDurasi);
 
-  // Tempat NONAKTIF tidak boleh dinyatakan tersedia.
-  const statusConflict = getPlaceStatusConflict(row.status, tanggalMulai, tanggalSelesai);
   const periodConflicts = getAvailabilityPeriodConflicts(row, tanggalMulai, tanggalSelesai);
   const konflik = await findScheduleConflicts(placeId, tanggalMulai, tanggalSelesai);
   const ruleConflicts = await findAvailabilityRuleConflicts(placeId, tanggalMulai, tanggalSelesai);
 
   const allConflicts = [
-    ...(statusConflict ? [statusConflict] : []),
     ...periodConflicts,
     ...konflik,
     ...ruleConflicts,
@@ -607,10 +577,9 @@ export async function checkAvailability(
  * pendapatan setelah komisi platform dipotong.
  */
 export async function getHostSummary(hostId: string): Promise<PlaceSummaryResponse> {
-  const [placeCount, bookingSummary] = await Promise.all([
-    pool.query<{ total: string; aktif: string }>(
-      `SELECT COUNT(*)::text AS total,
-              COUNT(*) FILTER (WHERE status = 'AKTIF')::text AS aktif
+  const [placeCount, bookingSummary, monthlyRevenue] = await Promise.all([
+    pool.query<{ total: string }>(
+      `SELECT COUNT(*)::text AS total
        FROM places WHERE host_id = $1::integer`,
       [hostId],
     ),
@@ -632,6 +601,19 @@ export async function getHostSummary(hostId: string): Promise<PlaceSummaryRespon
        WHERE p.host_id = $1::integer`,
       [hostId],
     ),
+    // Pendapatan bersih per bulan dari semua aktivitas pemesanan lunas.
+    pool.query<{ bulan: string; pendapatan: string }>(
+      `SELECT
+         TO_CHAR(DATE_TRUNC('month', b.created_at), 'YYYY-MM') AS bulan,
+         SUM(b.pendapatan_host)::text AS pendapatan
+       FROM bookings b
+       JOIN places p ON p.id = b.place_id
+       WHERE p.host_id = $1::integer
+         AND b.status = 'LUNAS'
+       GROUP BY DATE_TRUNC('month', b.created_at)
+       ORDER BY DATE_TRUNC('month', b.created_at)`,
+      [hostId],
+    ),
   ]);
 
   const places = placeCount.rows[0];
@@ -639,11 +621,14 @@ export async function getHostSummary(hostId: string): Promise<PlaceSummaryRespon
 
   return {
     total_tempat: toNumber(places?.total),
-    tempat_aktif: toNumber(places?.aktif),
     total_pemesanan: toNumber(bookings?.total),
     pemesanan_menunggu: toNumber(bookings?.menunggu),
     pemesanan_lunas: toNumber(bookings?.lunas),
     total_pendapatan: toNumber(bookings?.pendapatan),
     total_komisi: toNumber(bookings?.komisi),
+    pendapatan_bulanan: monthlyRevenue.rows.map((row) => ({
+      bulan: row.bulan,
+      pendapatan: toNumber(row.pendapatan),
+    })),
   };
 }
