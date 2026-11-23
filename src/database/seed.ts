@@ -166,9 +166,9 @@ async function seed(): Promise<void> {
     const result = await pool.query<{ id: number }>(
       `INSERT INTO places (
          host_id, nama_tempat, kategori, deskripsi, alamat, kota,
-         fasilitas, aturan, harga_normal, harga_promo, tipe_durasi, status
+         fasilitas, aturan, harga_normal, harga_promo, tipe_durasi
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'AKTIF')
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
       [
         hostId,

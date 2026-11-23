@@ -126,7 +126,7 @@ export async function generateKodeBooking(
  * Membuat pemesanan baru (SRS Tabel 3.1 Fitur "Pemesanan").
  *
  * Alur:
- * 1. Validasi tempat tersedia dan berstatus AKTIF.
+ * 1. Validasi tempat ada dan masih dalam periode ketersediaan.
  * 2. Mengunci baris tempat (`SELECT ... FOR UPDATE`) supaya dua permintaan
  *    bersamaan untuk tempat yang sama tidak bisa lolos pengecekan jadwal.
  * 3. Mengecek bentrok jadwal (Fitur "Validasi Ketersediaan").
@@ -148,7 +148,7 @@ export async function createBooking(
     const placeResult = await client.query<PlaceRow>(
       `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
               alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
-              tipe_durasi, status, created_at, updated_at,
+              tipe_durasi, created_at, updated_at,
               tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
               tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
        FROM places
@@ -161,10 +161,6 @@ export async function createBooking(
 
     if (!place) {
       throw notFound('Tempat tidak ditemukan');
-    }
-
-    if (place.status !== 'AKTIF') {
-      throw new AppError('Tempat sedang tidak aktif dan tidak bisa dipesan', 400);
     }
 
     if (place.host_id === tenantId) {
@@ -557,7 +553,7 @@ export async function previewPrice(
   const result = await pool.query<PlaceRow>(
     `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
             alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
-            tipe_durasi, status, created_at, updated_at,
+            tipe_durasi, created_at, updated_at,
             tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
             tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
      FROM places
@@ -570,10 +566,6 @@ export async function previewPrice(
 
   if (!place) {
     throw notFound('Tempat tidak ditemukan');
-  }
-
-  if (place.status !== 'AKTIF') {
-    throw new AppError('Tempat sedang tidak aktif dan tidak bisa dipesan', 400);
   }
 
   if (tenantId && place.host_id === tenantId) {

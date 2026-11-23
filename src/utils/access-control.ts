@@ -27,20 +27,3 @@ export function canAccessPayment(
     (requester.role === 'HOST' && requester.id === hostId)
   );
 }
-
-/**
- * Detail tempat boleh dilihat bila:
- * - status tempat AKTIF (publik), atau
- * - peminta adalah HOST pemilik tempat (boleh melihat tempat NONAKTIF).
- */
-export function canViewPlace(
-  status: string,
-  hostId: string,
-  requester?: Requester,
-): boolean {
-  if (status === 'AKTIF') {
-    return true;
-  }
-
-  return requester?.role === 'HOST' && requester.id === hostId;
-}
