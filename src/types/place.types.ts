@@ -12,8 +12,6 @@ export interface PlaceRow {
   deskripsi: string;
   alamat: string;
   kecamatan: PlaceKecamatan;
-  fasilitas: string | null;
-  aturan: string | null;
   harga: string;
   tipe_durasi: DurationType;
   created_at: Date;
@@ -27,11 +25,7 @@ export interface PlaceRow {
   jumlah_foto?: string;
 }
 
-/**
- * Bentuk data tempat yang dikirim ke frontend.
- * `fasilitas` disimpan sebagai teks di database, lalu dikirim juga dalam
- * bentuk array supaya lebih mudah ditampilkan di Flutter Web.
- */
+/** Bentuk data tempat yang dikirim ke frontend. */
 export interface PlaceResponse {
   id: string;
   host_id: string;
@@ -40,9 +34,6 @@ export interface PlaceResponse {
   deskripsi: string;
   alamat: string;
   kecamatan: PlaceKecamatan;
-  fasilitas: string | null;
-  fasilitas_list: string[];
-  aturan: string | null;
   harga: number;
   tipe_durasi: DurationType;
   created_at: string;
@@ -51,6 +42,8 @@ export interface PlaceResponse {
   tanggal_selesai_tersedia: string | null;
   foto: string[];
   nama_host?: string;
+  /** True bila tempat sedang memiliki pemesanan aktif. */
+  sudah_di_sewa: boolean;
   jumlah_foto?: number;
 }
 
@@ -92,8 +85,6 @@ export interface CreatePlaceInput {
   deskripsi: string;
   alamat: string;
   kecamatan: PlaceKecamatan;
-  fasilitas?: string;
-  aturan?: string;
   harga: number;
   tipe_durasi: DurationType;
   tanggal_mulai_tersedia?: string | null;
@@ -107,8 +98,6 @@ export interface UpdatePlaceInput {
   deskripsi?: string;
   alamat?: string;
   kecamatan?: PlaceKecamatan;
-  fasilitas?: string;
-  aturan?: string;
   harga?: number;
   tipe_durasi?: DurationType;
   tanggal_mulai_tersedia?: string | null;
@@ -137,53 +126,6 @@ export interface MyPlaceQuery {
 export interface AvailabilityQuery {
   tanggal_mulai: string;
   jumlah_durasi: number;
-}
-
-/** Aturan ketersediaan tempat (berbasis tanggal/hari/bulan). */
-export type AvailabilityRuleType = 'TANGGAL' | 'HARI' | 'BULAN';
-
-export interface AvailabilityRuleRow {
-  id: string;
-  place_id: string;
-  tipe_aturan: AvailabilityRuleType;
-  tanggal_mulai: string;
-  tanggal_selesai: string;
-  hari: number | null;
-  bulan: number | null;
-  tersedia: boolean;
-  created_at: Date;
-  updated_at: Date;
-}
-
-export interface AvailabilityRuleResponse {
-  id: string;
-  place_id: string;
-  tipe_aturan: AvailabilityRuleType;
-  tanggal_mulai: string;
-  tanggal_selesai: string;
-  hari: number | null;
-  bulan: number | null;
-  tersedia: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CreateAvailabilityRuleInput {
-  tipe_aturan: AvailabilityRuleType;
-  tanggal_mulai: string;
-  tanggal_selesai: string;
-  hari?: number | null;
-  bulan?: number | null;
-  tersedia?: boolean;
-}
-
-export interface UpdateAvailabilityRuleInput {
-  tipe_aturan?: AvailabilityRuleType;
-  tanggal_mulai?: string;
-  tanggal_selesai?: string;
-  hari?: number | null;
-  bulan?: number | null;
-  tersedia?: boolean;
 }
 
 export interface AvailabilityResult {

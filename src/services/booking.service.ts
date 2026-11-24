@@ -1,22 +1,18 @@
 ﻿import { pool, withTransaction } from '../config/database.js';
-import { COMMISSION_RATE } from '../config/constants.js';
+import { ADMIN_FEE } from '../config/constants.js';
 import type { Queryable } from '../types/database.js';
 import {
   ACTIVE_BOOKING_STATUSES,
   BOOKING_CODE_PREFIX,
   BOOKING_STATUS,
+  getBookingStatusLabel,
 } from '../types/domain.js';
 import { AppError, conflict, forbidden, notFound } from '../utils/app-error.js';
 import { calculateEndDate, today } from '../utils/date.js';
 import { buildPaginatedResult, toOffset, type PaginatedResult } from '../utils/pagination.js';
 import { calculatePrice } from '../utils/pricing.js';
-import {
-  findScheduleConflicts,
-} from './place.service.js';
-import {
-  getAvailabilityPeriodConflicts,
-} from './availability.logic.js';
-import { findAvailabilityRuleConflicts } from './placeAvailability.service.js';
+import { findScheduleConflicts } from './place.service.js';
+import { getAvailabilityPeriodConflicts } from './availability.logic.js';
 import type { PlaceRow } from '../types/place.types.js';
 import { createNotification } from './notification.service.js';
 import type {
@@ -38,6 +34,7 @@ const BOOKING_COLUMNS = `
   b.tanggal_selesai::text AS tanggal_selesai,
   b.jumlah_durasi         AS jumlah_durasi,
   b.total_harga           AS total_harga,
+  b.admin_fee             AS admin_fee,
   b.komisi_platform       AS komisi_platform,
   b.pendapatan_host       AS pendapatan_host,
   b.status                AS status,
@@ -64,6 +61,8 @@ function toNumber(value: string | number | null | undefined): number {
 /** Mengubah baris database menjadi bentuk respons API. */
 export function toBookingResponse(row: BookingRow): BookingResponse {
   const totalHarga = toNumber(row.total_harga);
+  const adminFee = toNumber(row.admin_fee);
+  const hargaSewa = totalHarga - adminFee;
 
   return {
     id: row.id,
@@ -75,14 +74,19 @@ export function toBookingResponse(row: BookingRow): BookingResponse {
     tanggal_mulai: row.tanggal_mulai,
     tanggal_selesai: row.tanggal_selesai,
     jumlah_durasi: row.jumlah_durasi,
-    // Harga per satuan diturunkan dari total harga agar selalu konsisten
-    // dengan rincian biaya yang tersimpan.
+    // Harga per satuan diturunkan dari harga sewa (tanpa biaya admin) agar
+    // selalu konsisten dengan rincian biaya yang tersimpan.
     harga_satuan:
-      row.jumlah_durasi > 0 ? Math.round((totalHarga / row.jumlah_durasi) * 100) / 100 : 0,
+      row.jumlah_durasi > 0 ? Math.round((hargaSewa / row.jumlah_durasi) * 100) / 100 : 0,
     total_harga: totalHarga,
+    admin_fee: adminFee,
     komisi_platform: toNumber(row.komisi_platform),
     pendapatan_host: toNumber(row.pendapatan_host),
     status: row.status,
+    status_label: getBookingStatusLabel(row.status),
+    // E-Pass hanya tersedia setelah lunas, karena kode booking dibuat saat
+    // pembayaran berhasil (sama dengan aturan pada epass.service.ts).
+    epass_tersedia: row.status === BOOKING_STATUS.LUNAS && Boolean(row.kode_booking),
     created_at: row.created_at?.toISOString(),
     nama_tempat: row.nama_tempat,
     kategori: row.kategori,
@@ -130,7 +134,7 @@ export async function generateKodeBooking(
  * 2. Mengunci baris tempat (`SELECT ... FOR UPDATE`) supaya dua permintaan
  *    bersamaan untuk tempat yang sama tidak bisa lolos pengecekan jadwal.
  * 3. Mengecek bentrok jadwal (Fitur "Validasi Ketersediaan").
- * 4. Menghitung total harga, komisi 10%, dan pendapatan host.
+ * 4. Menghitung harga sewa, biaya admin, dan pendapatan host.
  * 5. Menyimpan pemesanan dengan status MENUNGGU_PEMBAYARAN.
  */
 export async function createBooking(
@@ -147,7 +151,7 @@ export async function createBooking(
     // Kunci baris tempat: semua pemesanan untuk tempat ini akan berurutan.
     const placeResult = await client.query<PlaceRow>(
       `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-              alamat, kecamatan, fasilitas, aturan, harga,
+              alamat, kecamatan, harga,
               tipe_durasi, created_at, updated_at,
               tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
               tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
@@ -184,19 +188,6 @@ export async function createBooking(
       throw new AppError('Tanggal sewa berada di luar periode ketersediaan tempat', 400);
     }
 
-    // Aturan ketersediaan (TANGGAL/HARI/BULAN). Memakai client transaksi yang
-    // sama dengan pengecekan jadwal agar snapshot datanya konsisten.
-    const ruleConflicts = await findAvailabilityRuleConflicts(
-      placeId,
-      input.tanggal_mulai,
-      tanggalSelesai,
-      client,
-    );
-
-    if (ruleConflicts.length > 0) {
-      throw conflict('Jadwal tidak tersedia berdasarkan aturan ketersediaan tempat');
-    }
-
     // Validasi ketersediaan jadwal.
     const konflik = await findScheduleConflicts(
       placeId,
@@ -213,23 +204,23 @@ export async function createBooking(
       );
     }
 
-    // Hitung rincian biaya sesuai aturan SRS Subbab 3.3.6.
+    // Hitung rincian biaya: harga sewa + biaya admin platform.
     const harga = calculatePrice(
       toNumber(place.harga),
       input.jumlah_durasi,
-      COMMISSION_RATE,
+      ADMIN_FEE,
     );
 
     const insertResult = await client.query<BookingRow>(
       `INSERT INTO bookings (
          place_id, tenant_id, jenis_usaha, tanggal_mulai, tanggal_selesai,
-         jumlah_durasi, total_harga, komisi_platform, pendapatan_host, status
+         jumlah_durasi, total_harga, admin_fee, komisi_platform, pendapatan_host, status
        )
-       VALUES ($1::integer, $2::integer, $3, $4::date, $5::date, $6, $7, $8, $9, $10)
+       VALUES ($1::integer, $2::integer, $3, $4::date, $5::date, $6, $7, $8, $9, $10, $11)
        RETURNING id::text AS id, kode_booking, place_id::text AS place_id,
                  tenant_id::text AS tenant_id, jenis_usaha,
                  tanggal_mulai::text AS tanggal_mulai, tanggal_selesai::text AS tanggal_selesai,
-                 jumlah_durasi, total_harga, komisi_platform, pendapatan_host,
+                 jumlah_durasi, total_harga, admin_fee, komisi_platform, pendapatan_host,
                  status, created_at`,
       [
         placeId,
@@ -239,6 +230,7 @@ export async function createBooking(
         tanggalSelesai,
         input.jumlah_durasi,
         harga.total_harga,
+        harga.admin_fee,
         harga.komisi_platform,
         harga.pendapatan_host,
         BOOKING_STATUS.MENUNGGU_PEMBAYARAN,
@@ -398,7 +390,7 @@ export async function cancelBooking(
     `SELECT id::text AS id, kode_booking, place_id::text AS place_id,
             tenant_id::text AS tenant_id, jenis_usaha,
             tanggal_mulai::text AS tanggal_mulai, tanggal_selesai::text AS tanggal_selesai,
-            jumlah_durasi, total_harga, komisi_platform, pendapatan_host,
+            jumlah_durasi, total_harga, admin_fee, komisi_platform, pendapatan_host,
             status, created_at
      FROM bookings
      WHERE id = $1::integer
@@ -551,7 +543,7 @@ export async function previewPrice(
 
   const result = await pool.query<PlaceRow>(
     `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-            alamat, kecamatan, fasilitas, aturan, harga,
+            alamat, kecamatan, harga,
             tipe_durasi, created_at, updated_at,
             tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
             tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
@@ -574,16 +566,15 @@ export async function previewPrice(
   const tanggalSelesai = calculateEndDate(tanggalMulai, place.tipe_durasi, jumlahDurasi);
 
   const periodConflicts = getAvailabilityPeriodConflicts(place, tanggalMulai, tanggalSelesai);
-  const ruleConflicts = await findAvailabilityRuleConflicts(placeId, tanggalMulai, tanggalSelesai);
   const scheduleConflicts = await findScheduleConflicts(placeId, tanggalMulai, tanggalSelesai);
 
-  const konflik = [...periodConflicts, ...ruleConflicts, ...scheduleConflicts];
+  const konflik = [...periodConflicts, ...scheduleConflicts];
 
-    const harga = calculatePrice(
-      toNumber(place.harga),
-      jumlahDurasi,
-      COMMISSION_RATE,
-    );
+  const harga = calculatePrice(
+    toNumber(place.harga),
+    jumlahDurasi,
+    ADMIN_FEE,
+  );
 
   return {
     place_id: place.id,
@@ -594,6 +585,7 @@ export async function previewPrice(
     tipe_durasi: place.tipe_durasi,
     harga_satuan: harga.harga_satuan,
     total_harga: harga.total_harga,
+    admin_fee: harga.admin_fee,
     komisi_platform: harga.komisi_platform,
     pendapatan_host: harga.pendapatan_host,
     tersedia: konflik.length === 0,

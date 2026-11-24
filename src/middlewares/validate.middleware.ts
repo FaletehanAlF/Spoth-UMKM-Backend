@@ -10,7 +10,7 @@ interface ZodIssueLike {
 
 /**
  * Mengubah daftar error Zod menjadi format yang konsisten:
- * `{ field: "body.harga_normal", message: "Harga harus lebih besar dari 0" }`
+ * `{ field: "body.harga", message: "Harga harus lebih besar dari 0" }`
  */
 function formatIssues(issues: ZodIssueLike[], source: string): { field: string; message: string }[] {
   return issues.map((issue) => {

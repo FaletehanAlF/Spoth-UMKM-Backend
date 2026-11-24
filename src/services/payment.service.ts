@@ -23,6 +23,7 @@ interface BookingForPayment {
   tanggal_mulai: string;
   tanggal_selesai: string;
   total_harga: string;
+  admin_fee: string;
   komisi_platform: string;
   pendapatan_host: string;
   status: string;
@@ -70,6 +71,7 @@ export async function createPayment(
          b.tanggal_mulai::text  AS tanggal_mulai,
          b.tanggal_selesai::text AS tanggal_selesai,
          b.total_harga           AS total_harga,
+         b.admin_fee             AS admin_fee,
          b.komisi_platform       AS komisi_platform,
          b.pendapatan_host       AS pendapatan_host,
          b.status                AS status
@@ -155,6 +157,7 @@ export async function createPayment(
         created_at: payment.created_at?.toISOString(),
         kode_booking: kodeBooking,
         total_harga: totalHarga,
+        admin_fee: toNumber(booking.admin_fee),
         komisi_platform: toNumber(booking.komisi_platform),
         pendapatan_host: toNumber(booking.pendapatan_host),
         nama_tempat: booking.nama_tempat,
@@ -185,6 +188,7 @@ function toPaymentResponse(row: PaymentRow & { tenant_id: string; host_id: strin
     created_at: row.created_at?.toISOString(),
     kode_booking: row.kode_booking ?? null,
     total_harga: toNumber(row.total_harga),
+    admin_fee: toNumber(row.admin_fee),
     komisi_platform: toNumber(row.komisi_platform),
     pendapatan_host: toNumber(row.pendapatan_host),
     nama_tempat: row.nama_tempat,
@@ -221,6 +225,7 @@ export async function getPaymentByBookingId(
        pay.created_at     AS created_at,
        b.kode_booking     AS kode_booking,
        b.total_harga      AS total_harga,
+       b.admin_fee        AS admin_fee,
        b.komisi_platform  AS komisi_platform,
        b.pendapatan_host  AS pendapatan_host,
        p.nama_tempat      AS nama_tempat,

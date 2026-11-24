@@ -14,9 +14,12 @@ export interface EPassResponse {
   tipe_durasi: string;
   harga_satuan: number;
   total_harga: number;
+  admin_fee: number;
   komisi_platform: number;
   pendapatan_host: number;
   status: BookingStatus;
+  /** Label status siap tampil, contoh: "Berhasil Disewa" untuk status LUNAS. */
+  status_label: string;
   nama_tenant: string;
   nama_host: string;
   metode_pembayaran: string | null;

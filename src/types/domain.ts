@@ -70,6 +70,25 @@ export type BookingStatus = (typeof BOOKING_STATUS)[keyof typeof BOOKING_STATUS]
 export const BOOKING_STATUSES: BookingStatus[] = Object.values(BOOKING_STATUS);
 
 /**
+ * Label status pemesanan yang ditampilkan ke pengguna.
+ *
+ * Frontend (Flutter Web) tidak perlu menebak bahasa tampilannya: server
+ * mengirim label siap pakai pada setiap item riwayat penyewaan.
+ * `LUNAS` ditampilkan sebagai "Berhasil Disewa" karena pembayaran sudah lunas
+ * sehingga sewa dianggap berhasil.
+ */
+export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
+  MENUNGGU_PEMBAYARAN: 'Menunggu Pembayaran',
+  LUNAS: 'Berhasil Disewa',
+  DIBATALKAN: 'Dibatalkan',
+};
+
+/** Mengambil label tampilan sebuah status pemesanan. */
+export function getBookingStatusLabel(status: BookingStatus): string {
+  return BOOKING_STATUS_LABEL[status] ?? status;
+}
+
+/**
  * Status pemesanan yang masih "mengikat" jadwal tempat.
  * Jadwal bentrok dihitung hanya untuk status ini (SRS Subbab 3.3.6).
  */

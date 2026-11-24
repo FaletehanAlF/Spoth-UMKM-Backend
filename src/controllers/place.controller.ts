@@ -36,7 +36,7 @@ export const searchPlaces = asyncHandler(
 
 /**
  * GET /api/places/:id
- * Detail tempat: foto, fasilitas, aturan, lokasi, harga, dan ketersediaan.
+ * Detail tempat: foto, aturan, lokasi, harga, dan ketersediaan.
  */
 export const getPlace = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {

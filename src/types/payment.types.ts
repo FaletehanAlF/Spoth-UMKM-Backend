@@ -11,6 +11,7 @@ export interface PaymentRow {
   /** Data pemesanan yang dibayar (diisi pada query ringkasan pembayaran). */
   kode_booking?: string | null;
   total_harga?: string;
+  admin_fee?: string;
   komisi_platform?: string;
   pendapatan_host?: string;
   nama_tempat?: string;
@@ -27,6 +28,7 @@ export interface PaymentResponse {
   /** Ringkasan pemesanan yang dibayar. */
   kode_booking: string | null;
   total_harga: number;
+  admin_fee: number;
   komisi_platform: number;
   pendapatan_host: number;
   nama_tempat?: string;

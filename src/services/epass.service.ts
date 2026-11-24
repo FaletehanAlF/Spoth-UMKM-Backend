@@ -1,5 +1,5 @@
 ﻿import { pool } from '../config/database.js';
-import { BOOKING_STATUS, type BookingStatus } from '../types/domain.js';
+import { BOOKING_STATUS, getBookingStatusLabel, type BookingStatus } from '../types/domain.js';
 import { forbidden, notFound } from '../utils/app-error.js';
 import { formatDateIndo, formatRupiah } from '../utils/date.js';
 import type { EPassResponse } from '../types/epass.types.js';
@@ -20,6 +20,7 @@ interface EPassRow {
   jumlah_durasi: number;
   tipe_durasi: string;
   total_harga: string;
+  admin_fee: string;
   komisi_platform: string;
   pendapatan_host: string;
   status: BookingStatus;
@@ -67,6 +68,7 @@ export async function getEPass(
        b.jumlah_durasi         AS jumlah_durasi,
        p.tipe_durasi           AS tipe_durasi,
        b.total_harga           AS total_harga,
+       b.admin_fee             AS admin_fee,
        b.komisi_platform       AS komisi_platform,
        b.pendapatan_host       AS pendapatan_host,
        b.status                AS status,
@@ -112,6 +114,8 @@ export async function getEPass(
   }
 
   const totalHarga = toNumber(row.total_harga);
+  const adminFee = toNumber(row.admin_fee);
+  const hargaSewa = totalHarga - adminFee;
 
   return {
     kode_booking: row.kode_booking,
@@ -125,11 +129,13 @@ export async function getEPass(
     tanggal_selesai: row.tanggal_selesai,
     jumlah_durasi: row.jumlah_durasi,
     tipe_durasi: row.tipe_durasi,
-    harga_satuan: row.jumlah_durasi > 0 ? Math.round((totalHarga / row.jumlah_durasi) * 100) / 100 : 0,
+    harga_satuan: row.jumlah_durasi > 0 ? Math.round((hargaSewa / row.jumlah_durasi) * 100) / 100 : 0,
     total_harga: totalHarga,
+    admin_fee: adminFee,
     komisi_platform: toNumber(row.komisi_platform),
     pendapatan_host: toNumber(row.pendapatan_host),
     status: row.status,
+    status_label: getBookingStatusLabel(row.status),
     nama_tenant: row.nama_tenant,
     nama_host: row.nama_host,
     metode_pembayaran: row.metode,
@@ -151,8 +157,8 @@ export function formatEPassText(epass: EPassResponse): string {
     `Jenis Usaha  : ${epass.jenis_usaha}`,
     `Periode      : ${formatDateIndo(epass.tanggal_mulai)} s.d. ${formatDateIndo(epass.tanggal_selesai)}`,
     `Total Bayar  : ${formatRupiah(epass.total_harga)}`,
-    `Komisi       : ${formatRupiah(epass.komisi_platform)}`,
-    `Status       : ${epass.status}`,
+    `Biaya Admin  : ${formatRupiah(epass.admin_fee)}`,
+    `Status       : ${epass.status_label}`,
   ].join('\n');
 }
 

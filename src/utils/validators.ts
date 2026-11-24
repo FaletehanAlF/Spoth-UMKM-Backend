@@ -30,10 +30,32 @@ export function paramString(value: string | string[] | undefined): string {
   return value ?? '';
 }
 
+/**
+ * Mengubah nilai query string kosong menjadi `undefined`.
+ *
+ * Frontend sering mengirim `?status=&tanggal_mulai=` saat filter belum dipilih.
+ * Tanpa helper ini, string kosong dianggap nilai tidak valid sehingga endpoint
+ * membalas 400 padahal pengguna hanya membuka halaman daftar.
+ */
+export function emptyToUndefined(value: unknown): unknown {
+  return typeof value === 'string' && value.trim() === '' ? undefined : value;
+}
+
+/**
+ * Membuat skema query opsional yang mengabaikan nilai kosong.
+ * Dipakai untuk filter daftar (status, kode booking, tanggal, dan sejenisnya).
+ */
+export function optionalQuery<T extends z.ZodType>(schema: T) {
+  return z.preprocess(emptyToUndefined, schema.optional());
+}
+
 /** Parameter pagination untuk seluruh endpoint daftar. */
 export const paginationQuerySchema = z.object({
-  page: z.coerce.number().int().min(1, 'Page minimal 1').default(1),
-  limit: z.coerce.number().int().min(1, 'Limit minimal 1').max(100, 'Limit maksimal 100').default(12),
+  page: z.preprocess(emptyToUndefined, z.coerce.number().int().min(1, 'Page minimal 1').default(1)),
+  limit: z.preprocess(
+    emptyToUndefined,
+    z.coerce.number().int().min(1, 'Limit minimal 1').max(100, 'Limit maksimal 100').default(12),
+  ),
 });
 
 export type PaginationQuery = z.infer<typeof paginationQuerySchema>;

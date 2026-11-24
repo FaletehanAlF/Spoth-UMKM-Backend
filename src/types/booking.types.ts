@@ -11,6 +11,7 @@ export interface BookingRow {
   tanggal_selesai: string;
   jumlah_durasi: number;
   total_harga: string;
+  admin_fee: string;
   komisi_platform: string;
   pendapatan_host: string;
   status: BookingStatus;
@@ -42,9 +43,17 @@ export interface BookingResponse {
   jumlah_durasi: number;
   harga_satuan: number;
   total_harga: number;
+  admin_fee: number;
   komisi_platform: number;
   pendapatan_host: number;
   status: BookingStatus;
+  /** Label status siap tampil, contoh: "Berhasil Disewa" untuk status LUNAS. */
+  status_label: string;
+  /**
+   * True bila E-Pass sudah bisa dibuka (pemesanan lunas dan punya kode booking).
+   * Frontend cukup memanggil `GET /api/epass/:id` saat nilai ini true.
+   */
+  epass_tersedia: boolean;
   created_at: string;
   nama_tempat?: string;
   kategori?: string;
@@ -79,6 +88,7 @@ export interface PricePreviewResponse {
   tipe_durasi: string;
   harga_satuan: number;
   total_harga: number;
+  admin_fee: number;
   komisi_platform: number;
   pendapatan_host: number;
   tersedia: boolean;
