@@ -4,8 +4,13 @@
  * di sini agar mudah ditelusuri dan diubah.
  */
 
-/** Besarnya komisi platform. SRS Subbab 3.3.6: 10% dari total harga. */
-export const COMMISSION_RATE = 0.1;
+/**
+ * Biaya admin platform untuk setiap pembayaran.
+ *
+ * Biaya ini ditambahkan ke total tagihan Tenant dan seluruhnya menjadi
+ * pendapatan platform. Tidak ada potongan komisi lain dari harga sewa Host.
+ */
+export const ADMIN_FEE = 2000;
 
 /** Durasi sewa maksimum (dalam satuan durasi tempat). */
 export const MAX_BOOKING_DURATION = 365;

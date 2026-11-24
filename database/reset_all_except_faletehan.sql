@@ -8,7 +8,6 @@ DELETE FROM payments;
 DELETE FROM bookings;
 DELETE FROM notifications;
 DELETE FROM place_images;
-DELETE FROM place_availability_rules;
 DELETE FROM places;
 
 DELETE FROM users

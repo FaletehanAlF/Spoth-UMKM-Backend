@@ -1,6 +1,7 @@
-import type {
+﻿import type {
   DurationType,
   PlaceCategory,
+  PlaceKecamatan,
 } from './domain.js';
 
 export interface PlaceRow {
@@ -10,11 +11,8 @@ export interface PlaceRow {
   kategori: PlaceCategory;
   deskripsi: string;
   alamat: string;
-  kota: string;
-  fasilitas: string | null;
-  aturan: string | null;
-  harga_normal: string;
-  harga_promo: string | null;
+  kecamatan: PlaceKecamatan;
+  harga: string;
   tipe_durasi: DurationType;
   created_at: Date;
   updated_at: Date;
@@ -23,17 +21,11 @@ export interface PlaceRow {
   tanggal_selesai_tersedia: string | null;
   /** Nama host, diambil dari tabel `users`. */
   nama_host?: string;
-  /** Harga yang benar-benar dipakai (promo bila ada). */
-  harga_efektif?: string;
   /** Jumlah foto tempat. */
   jumlah_foto?: string;
 }
 
-/**
- * Bentuk data tempat yang dikirim ke frontend.
- * `fasilitas` disimpan sebagai teks di database, lalu dikirim juga dalam
- * bentuk array supaya lebih mudah ditampilkan di Flutter Web.
- */
+/** Bentuk data tempat yang dikirim ke frontend. */
 export interface PlaceResponse {
   id: string;
   host_id: string;
@@ -41,13 +33,8 @@ export interface PlaceResponse {
   kategori: PlaceCategory;
   deskripsi: string;
   alamat: string;
-  kota: string;
-  fasilitas: string | null;
-  fasilitas_list: string[];
-  aturan: string | null;
-  harga_normal: number;
-  harga_promo: number | null;
-  harga_efektif: number;
+  kecamatan: PlaceKecamatan;
+  harga: number;
   tipe_durasi: DurationType;
   created_at: string;
   updated_at: string;
@@ -55,6 +42,8 @@ export interface PlaceResponse {
   tanggal_selesai_tersedia: string | null;
   foto: string[];
   nama_host?: string;
+  /** True bila tempat sedang memiliki pemesanan aktif. */
+  sudah_di_sewa: boolean;
   jumlah_foto?: number;
 }
 
@@ -95,11 +84,8 @@ export interface CreatePlaceInput {
   kategori: PlaceCategory;
   deskripsi: string;
   alamat: string;
-  kota: string;
-  fasilitas?: string;
-  aturan?: string;
-  harga_normal: number;
-  harga_promo?: number;
+  kecamatan: PlaceKecamatan;
+  harga: number;
   tipe_durasi: DurationType;
   tanggal_mulai_tersedia?: string | null;
   tanggal_selesai_tersedia?: string | null;
@@ -111,11 +97,8 @@ export interface UpdatePlaceInput {
   kategori?: PlaceCategory;
   deskripsi?: string;
   alamat?: string;
-  kota?: string;
-  fasilitas?: string;
-  aturan?: string;
-  harga_normal?: number;
-  harga_promo?: number | null;
+  kecamatan?: PlaceKecamatan;
+  harga?: number;
   tipe_durasi?: DurationType;
   tanggal_mulai_tersedia?: string | null;
   tanggal_selesai_tersedia?: string | null;
@@ -128,7 +111,7 @@ export interface SearchPlaceQuery {
   min_harga?: number;
   max_harga?: number;
   tipe_durasi?: DurationType;
-  kota?: string;
+  kecamatan?: PlaceKecamatan;
   sort?: 'terbaru' | 'terlama' | 'harga_asc' | 'harga_desc' | 'nama';
   page: number;
   limit: number;
@@ -145,53 +128,6 @@ export interface AvailabilityQuery {
   jumlah_durasi: number;
 }
 
-/** Aturan ketersediaan tempat (berbasis tanggal/hari/bulan). */
-export type AvailabilityRuleType = 'TANGGAL' | 'HARI' | 'BULAN';
-
-export interface AvailabilityRuleRow {
-  id: string;
-  place_id: string;
-  tipe_aturan: AvailabilityRuleType;
-  tanggal_mulai: string;
-  tanggal_selesai: string;
-  hari: number | null;
-  bulan: number | null;
-  tersedia: boolean;
-  created_at: Date;
-  updated_at: Date;
-}
-
-export interface AvailabilityRuleResponse {
-  id: string;
-  place_id: string;
-  tipe_aturan: AvailabilityRuleType;
-  tanggal_mulai: string;
-  tanggal_selesai: string;
-  hari: number | null;
-  bulan: number | null;
-  tersedia: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CreateAvailabilityRuleInput {
-  tipe_aturan: AvailabilityRuleType;
-  tanggal_mulai: string;
-  tanggal_selesai: string;
-  hari?: number | null;
-  bulan?: number | null;
-  tersedia?: boolean;
-}
-
-export interface UpdateAvailabilityRuleInput {
-  tipe_aturan?: AvailabilityRuleType;
-  tanggal_mulai?: string;
-  tanggal_selesai?: string;
-  hari?: number | null;
-  bulan?: number | null;
-  tersedia?: boolean;
-}
-
 export interface AvailabilityResult {
   tersedia: boolean;
   tanggal_mulai: string;
@@ -199,3 +135,6 @@ export interface AvailabilityResult {
   jumlah_durasi: number;
   konflik: BookedRange[];
 }
+
+
+

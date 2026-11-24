@@ -14,10 +14,9 @@ WHERE metadata IS NOT NULL
 DELETE FROM payments;
 DELETE FROM bookings;
 
--- 3. Hapus data tempat. place_images dan place_availability_rules
---    memiliki FK CASCADE, tetapi dihapus eksplisit untuk kejelasan.
+-- 3. Hapus data tempat. place_images memiliki FK CASCADE, tetapi dihapus
+--    eksplisit agar urutan jelas.
 DELETE FROM place_images;
-DELETE FROM place_availability_rules;
 DELETE FROM places;
 
 -- 4. Reset sequence agar ID mulai dari 1 (opsional).
@@ -32,5 +31,4 @@ COMMIT;
 --   (SELECT COUNT(*) FROM places) AS places,
 --   (SELECT COUNT(*) FROM bookings) AS bookings,
 --   (SELECT COUNT(*) FROM payments) AS payments,
---   (SELECT COUNT(*) FROM place_images) AS place_images,
---   (SELECT COUNT(*) FROM place_availability_rules) AS availability_rules;
+--   (SELECT COUNT(*) FROM place_images) AS place_images;

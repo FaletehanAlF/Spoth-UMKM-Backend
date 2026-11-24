@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Domain constants & types shared by every module.
  *
  * Values here follow the SRS (Bab III dan Bab IV) so the database, the API
@@ -38,6 +38,26 @@ export type DurationType = (typeof DURATION_TYPE)[keyof typeof DURATION_TYPE];
 
 export const DURATION_TYPES: DurationType[] = Object.values(DURATION_TYPE);
 
+export const PLACE_KECAMATAN_LABELS = [
+  'Pancoran Mas',
+  'Cimanggis',
+  'Sawangan',
+  'Limo',
+  'Sukmajaya',
+  'Beji',
+  'Cipayung',
+  'Cilodong',
+  'Cinere',
+  'Tapos',
+  'Bojongsari',
+] as const;
+
+export type PlaceKecamatan = (typeof PLACE_KECAMATAN_LABELS)[number];
+
+export const PLACE_KECAMATANS: PlaceKecamatan[] = [
+  ...PLACE_KECAMATAN_LABELS,
+];
+
 /** Status pemesanan. SRS Tabel 3.3 & Tabel 4.5 (kolom `status`). */
 export const BOOKING_STATUS = {
   MENUNGGU_PEMBAYARAN: 'MENUNGGU_PEMBAYARAN',
@@ -48,6 +68,25 @@ export const BOOKING_STATUS = {
 export type BookingStatus = (typeof BOOKING_STATUS)[keyof typeof BOOKING_STATUS];
 
 export const BOOKING_STATUSES: BookingStatus[] = Object.values(BOOKING_STATUS);
+
+/**
+ * Label status pemesanan yang ditampilkan ke pengguna.
+ *
+ * Frontend (Flutter Web) tidak perlu menebak bahasa tampilannya: server
+ * mengirim label siap pakai pada setiap item riwayat penyewaan.
+ * `LUNAS` ditampilkan sebagai "Berhasil Disewa" karena pembayaran sudah lunas
+ * sehingga sewa dianggap berhasil.
+ */
+export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
+  MENUNGGU_PEMBAYARAN: 'Menunggu Pembayaran',
+  LUNAS: 'Berhasil Disewa',
+  DIBATALKAN: 'Dibatalkan',
+};
+
+/** Mengambil label tampilan sebuah status pemesanan. */
+export function getBookingStatusLabel(status: BookingStatus): string {
+  return BOOKING_STATUS_LABEL[status] ?? status;
+}
 
 /**
  * Status pemesanan yang masih "mengikat" jadwal tempat.
@@ -96,3 +135,4 @@ export interface UserResponse {
   role: UserRole;
   created_at?: string;
 }
+

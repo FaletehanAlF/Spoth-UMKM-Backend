@@ -1,9 +1,9 @@
-import { randomBytes } from 'node:crypto';
+﻿import { randomBytes } from 'node:crypto';
 
 import bcrypt from 'bcrypt';
 
 import { closeDatabasePool, pool } from '../config/database.js';
-import { COMMISSION_RATE } from '../config/constants.js';
+import { ADMIN_FEE } from '../config/constants.js';
 import { calculatePrice } from '../utils/pricing.js';
 
 /**
@@ -67,11 +67,8 @@ interface SeedPlace {
   kategori: 'LAPAK_USAHA' | 'TERAS_KOMERSIAL' | 'BOOTH_EVENT';
   deskripsi: string;
   alamat: string;
-  kota: string;
-  fasilitas: string;
-  aturan: string;
-  harga_normal: number;
-  harga_promo: number | null;
+  kecamatan: string;
+  harga: number;
   tipe_durasi: 'HARIAN' | 'MINGGUAN' | 'BULANAN';
   foto: string[];
 }
@@ -82,11 +79,8 @@ const PLACES: SeedPlace[] = [
     kategori: 'TERAS_KOMERSIAL',
     deskripsi: 'Teras ruko di jalan raya, cocok untuk kedai kopi atau gerobak makanan.',
     alamat: 'Jl. Merdeka No. 12',
-    kota: 'Depok',
-    fasilitas: 'Listrik, Meja, Kursi, Parkir, WiFi',
-    aturan: 'Tutup pukul 22.00. Dilarang membakar api di dalam teras.',
-    harga_normal: 150000,
-    harga_promo: 120000,
+    kecamatan: 'Pancoran Mas',
+    harga: 150000,
     tipe_durasi: 'HARIAN',
     foto: [],
   },
@@ -95,24 +89,18 @@ const PLACES: SeedPlace[] = [
     kategori: 'LAPAK_USAHA',
     deskripsi: 'Lapak nomor 2 di pasar rakyat dengan lalu lintas tinggi setiap hari.',
     alamat: 'Pasar Baru Blok C No. 2',
-    kota: 'Depok',
-    fasilitas: 'Listrik, Showcase, Air Bersih',
-    aturan: 'Jam operasional 06.00 - 20.00. Area tidak boleh dipakai menampung barang dalam jumlah besar.',
-    harga_normal: 75000,
-    harga_promo: null,
+    kecamatan: 'Pancoran Mas',
+    harga: 75000,
     tipe_durasi: 'HARIAN',
     foto: [],
   },
   {
-    nama_tempat: 'Booth Event Kota chaired',
+    nama_tempat: 'Booth Event kecamatan chaired',
     kategori: 'BOOTH_EVENT',
     deskripsi: 'Booth event indoor di area festival dengan kapasitas hingga 20 orang.',
     alamat: 'Gedung Serbaguna Lt. 3',
-    kota: 'Jakarta',
-    fasilitas: 'AC, Listrik, Sound System, WiFi',
-    aturan: 'Hanya untuk kegiatan event. Kebersihan wajib dijaga.',
-    harga_normal: 1500000,
-    harga_promo: 1200000,
+    kecamatan: 'Pancoran Mas',
+    harga: 1500000,
     tipe_durasi: 'HARIAN',
     foto: [],
   },
@@ -121,11 +109,8 @@ const PLACES: SeedPlace[] = [
     kategori: 'LAPAK_USAHA',
     deskripsi: 'Lapak pinggir jalan dengan akses keluar-masuk kendaraan besar.',
     alamat: 'Jl. Raya Bogor KM 12',
-    kota: 'Bogor',
-    fasilitas: 'Listrik, Parkir Luas, Air Bersih, Toilet',
-    aturan: 'Tidak boleh menyimpan bahan yang mudah terbakar.',
-    harga_normal: 200000,
-    harga_promo: null,
+    kecamatan: 'Pancoran Mas',
+    harga: 200000,
     tipe_durasi: 'MINGGUAN',
     foto: [],
   },
@@ -165,10 +150,10 @@ async function seed(): Promise<void> {
 
     const result = await pool.query<{ id: number }>(
       `INSERT INTO places (
-         host_id, nama_tempat, kategori, deskripsi, alamat, kota,
-         fasilitas, aturan, harga_normal, harga_promo, tipe_durasi
+         host_id, nama_tempat, kategori, deskripsi, alamat, kecamatan,
+         harga, tipe_durasi
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
       [
         hostId,
@@ -176,11 +161,8 @@ async function seed(): Promise<void> {
         place.kategori,
         place.deskripsi,
         place.alamat,
-        place.kota,
-        place.fasilitas,
-        place.aturan,
-        place.harga_normal,
-        place.harga_promo,
+        place.kecamatan,
+        place.harga,
         place.tipe_durasi,
       ],
     );
@@ -214,7 +196,7 @@ async function seed(): Promise<void> {
     {
       place_id: placeIds[1],
       tenant_id: tenantId,
-      jenis_usaha: 'Warung البيت',
+      jenis_usaha: 'Warung Ø§Ù„Ø¨ÙŠØª',
       tanggal_mulai: '2026-12-05',
       tanggal_selesai: '2026-12-05',
       jumlah_durasi: 1,
@@ -223,17 +205,16 @@ async function seed(): Promise<void> {
   ];
 
   for (const [index, pemesanan] of contohPemesanan.entries()) {
-    const placeResult = await pool.query<{ harga_normal: string; harga_promo: string | null }>(
-      'SELECT harga_normal, harga_promo FROM places WHERE id = $1',
+    const placeResult = await pool.query<{ harga: string }>(
+      'SELECT harga FROM places WHERE id = $1',
       [pemesanan.place_id],
     );
 
     const place = placeResult.rows[0];
     const harga = calculatePrice(
-      Number(place.harga_normal),
-      place.harga_promo === null ? null : Number(place.harga_promo),
+      Number(place.harga),
       pemesanan.jumlah_durasi,
-      COMMISSION_RATE,
+      ADMIN_FEE,
     );
 
     const kodeBooking =
@@ -244,10 +225,10 @@ async function seed(): Promise<void> {
     const bookingResult = await pool.query<{ id: number }>(
       `INSERT INTO bookings (
          kode_booking, place_id, tenant_id, jenis_usaha, tanggal_mulai,
-         tanggal_selesai, jumlah_durasi, total_harga, komisi_platform,
-         pendapatan_host, status
+         tanggal_selesai, jumlah_durasi, total_harga, admin_fee,
+         komisi_platform, pendapatan_host, status
        )
-       VALUES ($1, $2, $3, $4, $5::date, $6::date, $7, $8, $9, $10, $11)
+       VALUES ($1, $2, $3, $4, $5::date, $6::date, $7, $8, $9, $10, $11, $12)
        RETURNING id`,
       [
         kodeBooking,
@@ -258,6 +239,7 @@ async function seed(): Promise<void> {
         pemesanan.tanggal_selesai,
         pemesanan.jumlah_durasi,
         harga.total_harga,
+        harga.admin_fee,
         harga.komisi_platform,
         harga.pendapatan_host,
         pemesanan.status,
@@ -316,3 +298,5 @@ seed()
     await closeDatabasePool();
     process.exit(1);
   });
+
+

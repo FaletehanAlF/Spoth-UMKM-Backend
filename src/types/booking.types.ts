@@ -1,4 +1,4 @@
-import type { BookingStatus } from './domain.js';
+﻿import type { BookingStatus } from './domain.js';
 
 export interface BookingRow {
   id: string;
@@ -11,6 +11,7 @@ export interface BookingRow {
   tanggal_selesai: string;
   jumlah_durasi: number;
   total_harga: string;
+  admin_fee: string;
   komisi_platform: string;
   pendapatan_host: string;
   status: BookingStatus;
@@ -19,7 +20,7 @@ export interface BookingRow {
   nama_tempat?: string;
   kategori?: string;
   alamat?: string;
-  kota?: string;
+  kecamatan?: string;
   /** Nama penyewa (dari tabel `users`). */
   nama_tenant?: string;
   nama_host?: string;
@@ -42,14 +43,22 @@ export interface BookingResponse {
   jumlah_durasi: number;
   harga_satuan: number;
   total_harga: number;
+  admin_fee: number;
   komisi_platform: number;
   pendapatan_host: number;
   status: BookingStatus;
+  /** Label status siap tampil, contoh: "Berhasil Disewa" untuk status LUNAS. */
+  status_label: string;
+  /**
+   * True bila E-Pass sudah bisa dibuka (pemesanan lunas dan punya kode booking).
+   * Frontend cukup memanggil `GET /api/epass/:id` saat nilai ini true.
+   */
+  epass_tersedia: boolean;
   created_at: string;
   nama_tempat?: string;
   kategori?: string;
   alamat?: string;
-  kota?: string;
+  kecamatan?: string;
   nama_tenant?: string;
   nama_host?: string;
   foto?: string[];
@@ -78,11 +87,12 @@ export interface PricePreviewResponse {
   jumlah_durasi: number;
   tipe_durasi: string;
   harga_satuan: number;
-  harga_normal: number;
-  harga_promo: number | null;
   total_harga: number;
+  admin_fee: number;
   komisi_platform: number;
   pendapatan_host: number;
   tersedia: boolean;
   konflik: { tanggal_mulai: string; tanggal_selesai: string; status: string }[];
 }
+
+

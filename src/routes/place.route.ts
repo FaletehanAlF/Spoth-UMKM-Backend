@@ -5,13 +5,10 @@ import { validateBody, validateParams, validateQuery } from '../middlewares/vali
 import { USER_ROLE } from '../types/domain.js';
 import { idParamSchema } from '../utils/validators.js';
 import {
-  availabilityRuleParamsSchema,
   availabilitySchema,
-  createAvailabilityRuleSchema,
   createPlaceSchema,
   myPlaceSchema,
   searchPlaceSchema,
-  updateAvailabilityRuleSchema,
   updatePlaceSchema,
 } from '../validators/place.validation.js';
 import {
@@ -24,12 +21,6 @@ import {
   searchPlaces,
   updateExistingPlace,
 } from '../controllers/place.controller.js';
-import {
-  createAvailabilityRule,
-  getAvailabilityRules,
-  removeAvailabilityRule,
-  updateAvailabilityRule,
-} from '../controllers/placeAvailability.controller.js';
 
 const placeRouter = Router();
 
@@ -80,42 +71,6 @@ placeRouter.delete(
   authorize(USER_ROLE.HOST),
   validateParams(idParamSchema),
   removePlace,
-);
-
-// --- Aturan ketersediaan tempat (Host) --------------------------------------
-// Endpoint management: wajib login sebagai HOST dan hanya untuk tempat miliknya.
-placeRouter.get(
-  '/:id/availability-rules',
-  authenticate,
-  authorize(USER_ROLE.HOST),
-  validateParams(idParamSchema),
-  getAvailabilityRules,
-);
-
-placeRouter.post(
-  '/:id/availability-rules',
-  authenticate,
-  authorize(USER_ROLE.HOST),
-  validateParams(idParamSchema),
-  validateBody(createAvailabilityRuleSchema),
-  createAvailabilityRule,
-);
-
-placeRouter.patch(
-  '/:id/availability-rules/:ruleId',
-  authenticate,
-  authorize(USER_ROLE.HOST),
-  validateParams(availabilityRuleParamsSchema),
-  validateBody(updateAvailabilityRuleSchema),
-  updateAvailabilityRule,
-);
-
-placeRouter.delete(
-  '/:id/availability-rules/:ruleId',
-  authenticate,
-  authorize(USER_ROLE.HOST),
-  validateParams(availabilityRuleParamsSchema),
-  removeAvailabilityRule,
 );
 
 export default placeRouter;
