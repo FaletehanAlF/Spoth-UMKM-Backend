@@ -170,3 +170,13 @@ export async function deleteNotification(userId: string, notificationId: string)
     throw notFound('Notifikasi tidak ditemukan');
   }
 }
+
+/** Menghapus semua notifikasi milik pengguna. */
+export async function deleteAllNotifications(userId: string): Promise<number> {
+  const result = await pool.query(
+    'DELETE FROM notifications WHERE user_id = $1::integer',
+    [userId],
+  );
+
+  return result.rowCount ?? 0;
+}
