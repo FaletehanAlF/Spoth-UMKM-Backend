@@ -27,9 +27,8 @@ export type PlaceCategory = string;
 
 export const PLACE_CATEGORIES: PlaceCategory[] = Object.values(PLACE_CATEGORY);
 
-/** Satuan waktu sewa. SRS Tabel 3.3 & Tabel 4.3 (kolom `tipe_durasi`). */
+/** Satuan waktu sewa. Hanya ada paket mingguan dan bulanan. */
 export const DURATION_TYPE = {
-  HARIAN: 'HARIAN',
   MINGGUAN: 'MINGGUAN',
   BULANAN: 'BULANAN',
 } as const;
@@ -97,25 +96,16 @@ export const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
   BOOKING_STATUS.LUNAS,
 ];
 
-/** Status pembayaran simulasi. SRS Tabel 4.6 (kolom `status`). */
+/** Status pembayaran. Sejak memakai Midtrans nilainya mengikuti transaksi. */
 export const PAYMENT_STATUS = {
+  PENDING: 'PENDING',
   BERHASIL: 'BERHASIL',
   GAGAL: 'GAGAL',
+  EXPIRED: 'EXPIRED',
+  DIBATALKAN: 'DIBATALKAN',
 } as const;
 
 export type PaymentStatus = (typeof PAYMENT_STATUS)[keyof typeof PAYMENT_STATUS];
-
-/** Metode pembayaran yang tersedia (semua simulasi). SRS KNF-13. */
-export const PAYMENT_METHOD = {
-  DANA: 'DANA',
-  OVO: 'OVO',
-  GOPAY: 'GOPAY',
-  SHOPEEPAY: 'SHOPEEPAY',
-} as const;
-
-export type PaymentMethod = (typeof PAYMENT_METHOD)[keyof typeof PAYMENT_METHOD];
-
-export const PAYMENT_METHODS: PaymentMethod[] = Object.values(PAYMENT_METHOD);
 
 /** Prefix kode booking pada E-Pass. SRS Tabel 3.3 (`kode_booking`). */
 export const BOOKING_CODE_PREFIX = 'SPOTH';

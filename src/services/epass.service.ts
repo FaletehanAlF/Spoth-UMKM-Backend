@@ -1,5 +1,5 @@
 ﻿import { pool } from '../config/database.js';
-import { BOOKING_STATUS, getBookingStatusLabel, type BookingStatus } from '../types/domain.js';
+import { BOOKING_STATUS, getBookingStatusLabel, type BookingStatus, type DurationType } from '../types/domain.js';
 import { forbidden, notFound } from '../utils/app-error.js';
 import { formatDateIndo, formatRupiah } from '../utils/date.js';
 import type { EPassResponse } from '../types/epass.types.js';
@@ -18,7 +18,7 @@ interface EPassRow {
   tanggal_mulai: string;
   tanggal_selesai: string;
   jumlah_durasi: number;
-  tipe_durasi: string;
+  tipe_durasi: DurationType;
   total_harga: string;
   admin_fee: string;
   komisi_platform: string;
@@ -66,7 +66,7 @@ export async function getEPass(
        b.tanggal_mulai::text  AS tanggal_mulai,
        b.tanggal_selesai::text AS tanggal_selesai,
        b.jumlah_durasi         AS jumlah_durasi,
-       p.tipe_durasi           AS tipe_durasi,
+       b.tipe_durasi           AS tipe_durasi,
        b.total_harga           AS total_harga,
        b.admin_fee             AS admin_fee,
        b.komisi_platform       AS komisi_platform,

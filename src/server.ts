@@ -2,7 +2,8 @@ import http from 'node:http';
 
 import app from './app.js';
 import { checkDatabaseConnection, closeDatabasePool } from './config/database.js';
-import { env, validateProductionConfig } from './config/env.js';
+import { env, validateMidtransConfig, validateProductionConfig } from './config/env.js';
+import { cekKunciMidtrans } from './config/midtrans.js';
 import { initSocket } from './config/socket.js';
 
 const port = env.port;
@@ -11,6 +12,17 @@ async function start(): Promise<void> {
   // Fail-fast di production: jika konfigurasi kritis (TLS DB, CORS allowlist,
   // JWT_SECRET) tidak lengkap, aplikasi ditolak sebelum listen.
   validateProductionConfig();
+
+  // Peringatan (bukan penghentian) bila key Midtrans tidak cocok dengan mode.
+  validateMidtransConfig();
+
+  // Cek langsung ke Midtrans di background. Log ini membedakan key yang
+  // formatnya benar dari key yang benar-benar diterima Midtrans.
+  if (env.midtrans.serverKey) {
+    void cekKunciMidtrans().then((hasil) => {
+      console.log(`[midtrans] ${hasil.message}`);
+    });
+  }
 
   try {
     const serverTime = await checkDatabaseConnection();

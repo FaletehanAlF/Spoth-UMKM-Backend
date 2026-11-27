@@ -56,6 +56,7 @@ export const getAvailability = asyncHandler(
     const result = await checkAvailability(
       paramString(req.params.id),
       query.tanggal_mulai,
+      query.tipe_durasi,
       query.jumlah_durasi,
     );
 

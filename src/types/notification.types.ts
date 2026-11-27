@@ -1,5 +1,3 @@
-import type { BookingStatus } from './domain.js';
-
 export interface NotificationRow {
   id: string;
   user_id: string;

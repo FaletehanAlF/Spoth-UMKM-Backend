@@ -1,19 +1,11 @@
 import 'dotenv/config';
 
-import path from 'node:path';
-
 function toBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined || value.trim() === '') {
     return fallback;
   }
 
   return value.trim().toLowerCase() === 'true';
-}
-
-function toNumber(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 /**
@@ -108,6 +100,11 @@ export const env = {
     apiSecret: process.env.CLOUDINARY_API_SECRET ?? '',
     folder: process.env.CLOUDINARY_FOLDER?.trim() || 'spoth-umkm',
   },
+  midtrans: {
+    serverKey: process.env.MIDTRANS_SERVER_KEY?.trim() ?? '',
+    signatureSecretKey: process.env.MIDTRANS_SIGNATURE_SECRET_KEY?.trim() ?? '',
+    isProduction: toBoolean(process.env.MIDTRANS_IS_PRODUCTION, false),
+  },
 } as const;
 
 /**
@@ -139,6 +136,44 @@ export function validateProductionConfig(): void {
   // 3. JWT Secret: harus cukup kuat di production.
   if (env.jwt.secret.length < 32) {
     throw new Error('JWT_SECRET minimal 32 karakter di NODE_ENV=production.');
+  }
+
+  // 4. Midtrans: pembayaran tidak akan berjalan tanpa server key.
+  if (!env.midtrans.serverKey) {
+    throw new Error('MIDTRANS_SERVER_KEY wajib diisi pada NODE_ENV=production.');
+  }
+
+  if (env.midtrans.isProduction === false) {
+    console.warn(
+      '[midtrans] MIDTRANS_IS_PRODUCTION=false, transaksi memakai sandbox.',
+    );
+  }
+}
+
+/**
+ * Memeriksa konfigurasi Midtrans dan memberi peringatan bila belum lengkap.
+ *
+ * Format key Midtrans bisa berubah (sejak Oktober 2026 Server Key dibuat lewat
+ * dashboard dan hanya ditampilkan sekali), jadi jangan menebak environment dari
+ * awalan key. Keabsahan key tetap diverifikasi oleh Midtrans saat transaksi.
+ */
+export function validateMidtransConfig(): void {
+  if (!env.midtrans.serverKey) {
+    console.warn(
+      '[midtrans] MIDTRANS_SERVER_KEY belum diisi. Pembayaran belum bisa diproses.',
+    );
+    return;
+  }
+
+  console.log(
+    `[midtrans] Mode ${env.midtrans.isProduction ? 'production' : 'sandbox'}.`,
+  );
+
+  if (!env.midtrans.signatureSecretKey) {
+    console.log(
+      '[midtrans] MIDTRANS_SIGNATURE_SECRET_KEY belum diisi; verifikasi ' +
+        'webhook memakai Server Key (kompatibel dengan integrasi lama).',
+    );
   }
 }
 

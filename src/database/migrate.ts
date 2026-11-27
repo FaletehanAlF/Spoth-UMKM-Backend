@@ -104,7 +104,7 @@ migrate()
     await closeDatabasePool();
     process.exit(0);
   })
-  .catch(async (error) => {
+  .catch(async () => {
     console.error('[migrate] Migrasi dibatalkan karena terjadi error.');
     await closeDatabasePool();
     process.exit(1);

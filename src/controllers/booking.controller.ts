@@ -95,6 +95,7 @@ export const getPricePreview = asyncHandler(
     const preview = await previewPrice(
       String(query.place_id),
       query.tanggal_mulai,
+      query.tipe_durasi,
       query.jumlah_durasi,
       req.user!.id,
     );

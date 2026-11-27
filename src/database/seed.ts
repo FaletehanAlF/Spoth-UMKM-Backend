@@ -68,8 +68,8 @@ interface SeedPlace {
   deskripsi: string;
   alamat: string;
   kecamatan: string;
-  harga: number;
-  tipe_durasi: 'HARIAN' | 'MINGGUAN' | 'BULANAN';
+  harga_mingguan: number | null;
+  harga_bulanan: number | null;
   foto: string[];
 }
 
@@ -77,41 +77,45 @@ const PLACES: SeedPlace[] = [
   {
     nama_tempat: 'Teras Ruko Merdeka',
     kategori: 'TERAS_KOMERSIAL',
-    deskripsi: 'Teras ruko di jalan raya, cocok untuk kedai kopi atau gerobak makanan.',
+    deskripsi:
+      'Teras ruko di pinggir jalan raya utama Depok dengan akses mudah untuk kendaraan roda dua maupun roda empat. Cocok untuk kedai kopi, gerobak makanan, atau toko kecil yang butuh lokasi strategis dan ramai pengunjung setiap hari.',
     alamat: 'Jl. Merdeka No. 12',
     kecamatan: 'Pancoran Mas',
-    harga: 150000,
-    tipe_durasi: 'HARIAN',
+    harga_mingguan: 150000,
+    harga_bulanan: 450000,
     foto: [],
   },
   {
     nama_tempat: 'Lapak Josiah 2',
     kategori: 'LAPAK_USAHA',
-    deskripsi: 'Lapak nomor 2 di pasar rakyat dengan lalu lintas tinggi setiap hari.',
+    deskripsi:
+      'Lapak nomor 2 di pasar rakyat dengan lalu lintas pembeli yang tinggi setiap hari. Area sudah beratap, tersedia colokan listrik, dan dekat dengan akses bongkar muat barang sehingga praktis untuk berjualan makanan maupun barang harian.',
     alamat: 'Pasar Baru Blok C No. 2',
     kecamatan: 'Pancoran Mas',
-    harga: 75000,
-    tipe_durasi: 'HARIAN',
+    harga_mingguan: 75000,
+    harga_bulanan: null,
     foto: [],
   },
   {
     nama_tempat: 'Booth Event kecamatan chaired',
     kategori: 'BOOTH_EVENT',
-    deskripsi: 'Booth event indoor di area festival dengan kapasitas hingga 20 orang.',
+    deskripsi:
+      'Booth event indoor di area festival dengan kapasitas hingga 20 orang pengunjung sekaligus. Sudah dilengkapi meja, kursi, dan penerangan, cocok untuk pameran produk UMKM, bazar makanan, maupun promosi brand saat acara berlangsung.',
     alamat: 'Gedung Serbaguna Lt. 3',
     kecamatan: 'Pancoran Mas',
-    harga: 1500000,
-    tipe_durasi: 'HARIAN',
+    harga_mingguan: 1500000,
+    harga_bulanan: 4500000,
     foto: [],
   },
   {
     nama_tempat: 'Lapak``: PasarOKE',
     kategori: 'LAPAK_USAHA',
-    deskripsi: 'Lapak pinggir jalan dengan akses keluar-masuk kendaraan besar.',
+    deskripsi:
+      'Lapak pinggir jalan dengan akses keluar-masuk kendaraan besar, cocok untuk usaha yang butuh area parkir luas atau bongkar muat barang. Lokasi terbuka dan terlihat jelas dari jalan raya sehingga mudah ditemukan calon pembeli baru.',
     alamat: 'Jl. Raya Bogor KM 12',
     kecamatan: 'Pancoran Mas',
-    harga: 200000,
-    tipe_durasi: 'MINGGUAN',
+    harga_mingguan: null,
+    harga_bulanan: 200000,
     foto: [],
   },
 ];
@@ -151,7 +155,7 @@ async function seed(): Promise<void> {
     const result = await pool.query<{ id: number }>(
       `INSERT INTO places (
          host_id, nama_tempat, kategori, deskripsi, alamat, kecamatan,
-         harga, tipe_durasi
+         harga_mingguan, harga_bulanan
        )
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
@@ -162,8 +166,8 @@ async function seed(): Promise<void> {
         place.deskripsi,
         place.alamat,
         place.kecamatan,
-        place.harga,
-        place.tipe_durasi,
+        place.harga_mingguan,
+        place.harga_bulanan,
       ],
     );
 

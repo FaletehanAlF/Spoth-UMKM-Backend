@@ -1,4 +1,4 @@
-﻿import type { BookingStatus } from './domain.js';
+﻿import type { BookingStatus, DurationType } from './domain.js';
 
 export interface EPassResponse {
   kode_booking: string;
@@ -11,7 +11,7 @@ export interface EPassResponse {
   tanggal_mulai: string;
   tanggal_selesai: string;
   jumlah_durasi: number;
-  tipe_durasi: string;
+  tipe_durasi: DurationType;
   harga_satuan: number;
   total_harga: number;
   admin_fee: number;

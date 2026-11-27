@@ -6,13 +6,13 @@ import {
   BOOKING_CODE_PREFIX,
   BOOKING_STATUS,
   getBookingStatusLabel,
+  type DurationType,
 } from '../types/domain.js';
 import { AppError, conflict, forbidden, notFound } from '../utils/app-error.js';
 import { calculateEndDate, today } from '../utils/date.js';
 import { buildPaginatedResult, toOffset, type PaginatedResult } from '../utils/pagination.js';
 import { calculatePrice } from '../utils/pricing.js';
-import { findScheduleConflicts } from './place.service.js';
-import { getAvailabilityPeriodConflicts } from './availability.logic.js';
+import { findScheduleConflicts, hargaPaket } from './place.service.js';
 import type { PlaceRow } from '../types/place.types.js';
 import { createNotification } from './notification.service.js';
 import type {
@@ -33,6 +33,7 @@ const BOOKING_COLUMNS = `
   b.tanggal_mulai::text   AS tanggal_mulai,
   b.tanggal_selesai::text AS tanggal_selesai,
   b.jumlah_durasi         AS jumlah_durasi,
+  b.tipe_durasi           AS tipe_durasi,
   b.total_harga           AS total_harga,
   b.admin_fee             AS admin_fee,
   b.komisi_platform       AS komisi_platform,
@@ -74,7 +75,7 @@ export function toBookingResponse(row: BookingRow): BookingResponse {
     tanggal_mulai: row.tanggal_mulai,
     tanggal_selesai: row.tanggal_selesai,
     jumlah_durasi: row.jumlah_durasi,
-    // Harga per satuan diturunkan dari harga sewa (tanpa biaya admin) agar
+    tipe_durasi: row.tipe_durasi,
     // selalu konsisten dengan rincian biaya yang tersimpan.
     harga_satuan:
       row.jumlah_durasi > 0 ? Math.round((hargaSewa / row.jumlah_durasi) * 100) / 100 : 0,
@@ -151,10 +152,8 @@ export async function createBooking(
     // Kunci baris tempat: semua pemesanan untuk tempat ini akan berurutan.
     const placeResult = await client.query<PlaceRow>(
       `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-              alamat, kecamatan, harga,
-              tipe_durasi, created_at, updated_at,
-              tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
-              tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
+              alamat, kecamatan, harga_mingguan, harga_bulanan,
+              created_at, updated_at
        FROM places
        WHERE id = $1::integer
        FOR UPDATE`,
@@ -171,22 +170,14 @@ export async function createBooking(
       throw new AppError('Anda tidak bisa menyewa tempat milik Anda sendiri', 400);
     }
 
-    // Batas periode tempat dapat disewa (jika diatur).
+    // Harga per paket mengikuti satuan yang dipilih penyewa.
+    const hargaPerPaket = hargaPaket(place, input.tipe_durasi);
+
     const tanggalSelesai = calculateEndDate(
       input.tanggal_mulai,
-      place.tipe_durasi,
+      input.tipe_durasi,
       input.jumlah_durasi,
     );
-
-    const periodConflicts = getAvailabilityPeriodConflicts(
-      place,
-      input.tanggal_mulai,
-      tanggalSelesai,
-    );
-
-    if (periodConflicts.length > 0) {
-      throw new AppError('Tanggal sewa berada di luar periode ketersediaan tempat', 400);
-    }
 
     // Validasi ketersediaan jadwal.
     const konflik = await findScheduleConflicts(
@@ -204,24 +195,21 @@ export async function createBooking(
       );
     }
 
-    // Hitung rincian biaya: harga sewa + biaya admin platform.
-    const harga = calculatePrice(
-      toNumber(place.harga),
-      input.jumlah_durasi,
-      ADMIN_FEE,
-    );
+    // Hitung rincian biaya: harga paket x jumlah paket + biaya admin platform.
+    const harga = calculatePrice(hargaPerPaket, input.jumlah_durasi, ADMIN_FEE);
 
     const insertResult = await client.query<BookingRow>(
       `INSERT INTO bookings (
          place_id, tenant_id, jenis_usaha, tanggal_mulai, tanggal_selesai,
-         jumlah_durasi, total_harga, admin_fee, komisi_platform, pendapatan_host, status
+         jumlah_durasi, tipe_durasi, total_harga, admin_fee, komisi_platform,
+         pendapatan_host, status
        )
-       VALUES ($1::integer, $2::integer, $3, $4::date, $5::date, $6, $7, $8, $9, $10, $11)
+       VALUES ($1::integer, $2::integer, $3, $4::date, $5::date, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id::text AS id, kode_booking, place_id::text AS place_id,
                  tenant_id::text AS tenant_id, jenis_usaha,
                  tanggal_mulai::text AS tanggal_mulai, tanggal_selesai::text AS tanggal_selesai,
-                 jumlah_durasi, total_harga, admin_fee, komisi_platform, pendapatan_host,
-                 status, created_at`,
+                 jumlah_durasi, tipe_durasi, total_harga, admin_fee, komisi_platform,
+                 pendapatan_host, status, created_at`,
       [
         placeId,
         tenantId,
@@ -229,6 +217,7 @@ export async function createBooking(
         input.tanggal_mulai,
         tanggalSelesai,
         input.jumlah_durasi,
+        input.tipe_durasi,
         harga.total_harga,
         harga.admin_fee,
         harga.komisi_platform,
@@ -534,6 +523,7 @@ export async function cancelBookingByHost(
 export async function previewPrice(
   placeId: string,
   tanggalMulai: string,
+  tipeDurasi: DurationType,
   jumlahDurasi: number,
   tenantId?: string,
 ): Promise<PricePreviewResponse> {
@@ -543,10 +533,8 @@ export async function previewPrice(
 
   const result = await pool.query<PlaceRow>(
     `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-            alamat, kecamatan, harga,
-            tipe_durasi, created_at, updated_at,
-            tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
-            tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
+            alamat, kecamatan, harga_mingguan, harga_bulanan,
+            created_at, updated_at
      FROM places
      WHERE id = $1::integer
      LIMIT 1`,
@@ -563,18 +551,15 @@ export async function previewPrice(
     throw new AppError('Anda tidak bisa menyewa tempat milik Anda sendiri', 400);
   }
 
-  const tanggalSelesai = calculateEndDate(tanggalMulai, place.tipe_durasi, jumlahDurasi);
+  const hargaPerPaket = hargaPaket(place, tipeDurasi);
 
-  const periodConflicts = getAvailabilityPeriodConflicts(place, tanggalMulai, tanggalSelesai);
+  const tanggalSelesai = calculateEndDate(tanggalMulai, tipeDurasi, jumlahDurasi);
+
   const scheduleConflicts = await findScheduleConflicts(placeId, tanggalMulai, tanggalSelesai);
 
-  const konflik = [...periodConflicts, ...scheduleConflicts];
+  const konflik = scheduleConflicts;
 
-  const harga = calculatePrice(
-    toNumber(place.harga),
-    jumlahDurasi,
-    ADMIN_FEE,
-  );
+  const harga = calculatePrice(hargaPerPaket, jumlahDurasi, ADMIN_FEE);
 
   return {
     place_id: place.id,
@@ -582,7 +567,7 @@ export async function previewPrice(
     tanggal_mulai: tanggalMulai,
     tanggal_selesai: tanggalSelesai,
     jumlah_durasi: jumlahDurasi,
-    tipe_durasi: place.tipe_durasi,
+    tipe_durasi: tipeDurasi,
     harga_satuan: harga.harga_satuan,
     total_harga: harga.total_harga,
     admin_fee: harga.admin_fee,

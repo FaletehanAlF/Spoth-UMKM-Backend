@@ -1,19 +1,6 @@
-/**
- * Pembulatan uang ke 2 desimal (satuan rupiah penuh).
- *
- * Semua perhitungan harga memakai helper ini supaya tidak ada selisih
- * pembulatan antara total harga, komisi platform, dan pendapatan host.
- */
+/** Pembulatan uang ke 2 desimal (satuan rupiah penuh). */
 export function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
-/**
- * Harga per satuan sewa.
- * Kini hanya ada satu harga (tidak ada promo), jadi langsung dipakai.
- */
-export function getUnitPrice(harga: number): number {
-  return harga;
 }
 
 export interface PriceBreakdown {
