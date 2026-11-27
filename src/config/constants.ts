@@ -12,8 +12,22 @@
  */
 export const ADMIN_FEE = 2000;
 
-/** Durasi sewa maksimum (dalam satuan durasi tempat). */
-export const MAX_BOOKING_DURATION = 365;
+/** Jumlah hari dalam satu paket mingguan. */
+export const HARI_PER_MINGGU = 7;
+
+/** Jumlah hari dalam satu paket bulanan (bulan dihitung tetap 30 hari). */
+export const HARI_PER_BULAN = 30;
+
+/** Batas jumlah paket mingguan yang bisa disewa sekaligus. */
+export const MAX_SEWA_MINGGU = 3;
+
+/** Batas jumlah paket bulanan yang bisa disewa sekaligus. */
+export const MAX_SEWA_BULAN = 6;
+
+/** Batas jumlah paket sesuai satuan sewa yang dipilih. */
+export function batasPaket(tipe: 'MINGGUAN' | 'BULANAN'): number {
+  return tipe === 'BULANAN' ? MAX_SEWA_BULAN : MAX_SEWA_MINGGU;
+}
 
 /** Batas jumlah foto per tempat. */
 export const MAX_PLACE_IMAGES = 6;

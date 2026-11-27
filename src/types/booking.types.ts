@@ -1,4 +1,4 @@
-﻿import type { BookingStatus } from './domain.js';
+﻿import type { BookingStatus, DurationType } from './domain.js';
 
 export interface BookingRow {
   id: string;
@@ -10,6 +10,8 @@ export interface BookingRow {
   tanggal_mulai: string;
   tanggal_selesai: string;
   jumlah_durasi: number;
+  /** Satuan paket yang dipilih penyewa saat memesan. */
+  tipe_durasi: DurationType;
   total_harga: string;
   admin_fee: string;
   komisi_platform: string;
@@ -41,6 +43,7 @@ export interface BookingResponse {
   tanggal_mulai: string;
   tanggal_selesai: string;
   jumlah_durasi: number;
+  tipe_durasi: DurationType;
   harga_satuan: number;
   total_harga: number;
   admin_fee: number;
@@ -67,6 +70,7 @@ export interface BookingResponse {
 export interface CreateBookingInput {
   place_id: number;
   tanggal_mulai: string;
+  tipe_durasi: DurationType;
   jumlah_durasi: number;
   jenis_usaha: string;
 }
@@ -85,7 +89,7 @@ export interface PricePreviewResponse {
   tanggal_mulai: string;
   tanggal_selesai: string;
   jumlah_durasi: number;
-  tipe_durasi: string;
+  tipe_durasi: DurationType;
   harga_satuan: number;
   total_harga: number;
   admin_fee: number;

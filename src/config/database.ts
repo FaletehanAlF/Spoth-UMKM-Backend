@@ -88,7 +88,7 @@ export type DbClient = PoolClient;
  * - Jika callback sukses, transaksi di-commit.
  *
  * Transaksi dipakai pada pembuatan pemesanan (validasi jadwal anti
- * double booking) dan pembayaran simulasi (pembuatan E-Pass).
+ * double booking) dan pembayaran (pembuatan E-Pass).
  */
 export async function withTransaction<T>(
   callback: (client: DbClient) => Promise<T>,

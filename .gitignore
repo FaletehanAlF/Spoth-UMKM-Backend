@@ -16,3 +16,8 @@ coverage/
 # Berkas log
 *.log
 npm-debug.log*
+
+# Catatan alat bantu pengembangan, bukan bagian aplikasi.
+.freebuff/
+.vibecode/
+AGENTS.md

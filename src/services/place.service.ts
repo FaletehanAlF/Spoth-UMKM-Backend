@@ -1,11 +1,9 @@
 ﻿import { pool, withTransaction } from '../config/database.js';
-import { ACTIVE_BOOKING_STATUSES } from '../types/domain.js';
+import { ACTIVE_BOOKING_STATUSES, DURATION_TYPE, type DurationType } from '../types/domain.js';
 import type { Queryable } from '../types/database.js';
 import { AppError, conflict, notFound } from '../utils/app-error.js';
 import { calculateEndDate, today } from '../utils/date.js';
 import { buildPaginatedResult, toOffset, type PaginatedResult } from '../utils/pagination.js';
-import { getUnitPrice } from '../utils/pricing.js';
-import { getAvailabilityPeriodConflicts } from './availability.logic.js';
 import { ensureCategory } from './category.service.js';
 import type {
   AvailabilityResult,
@@ -29,13 +27,12 @@ const PLACE_COLUMNS = `
   p.deskripsi           AS deskripsi,
   p.alamat              AS alamat,
   p.kecamatan           AS kecamatan,
-  p.harga               AS harga,
-  p.tipe_durasi         AS tipe_durasi,
+  p.harga_mingguan    AS harga_mingguan,
+  p.harga_bulanan     AS harga_bulanan,
   p.created_at          AS created_at,
   p.updated_at          AS updated_at,
-  p.tanggal_mulai_tersedia::text    AS tanggal_mulai_tersedia,
-  p.tanggal_selesai_tersedia::text  AS tanggal_selesai_tersedia,
   u.nama                AS nama_host,
+  u.foto                AS foto_host,
   (SELECT COUNT(*) FROM place_images pi WHERE pi.place_id = p.id)::int AS jumlah_foto
 `;
 
@@ -47,13 +44,32 @@ function toNumber(value: string | number | null | undefined): number {
   return typeof value === 'number' ? value : Number(value);
 }
 
+/**
+ * Menentukan paket termurah dari sebuah tempat.
+ *
+ * Minimal satu paket selalu terisi (dijaga oleh constraint database), jadi
+ * fungsi ini tidak pernah mengembalikan nilai kosong.
+ */
+function pilihPaketTermurah(
+  hargaMingguan: number | null,
+  hargaBulanan: number | null,
+): { harga: number; satuan: DurationType } {
+  if (hargaMingguan !== null && (hargaBulanan === null || hargaMingguan <= hargaBulanan)) {
+    return { harga: hargaMingguan, satuan: DURATION_TYPE.MINGGUAN };
+  }
+
+  return { harga: hargaBulanan ?? 0, satuan: DURATION_TYPE.BULANAN };
+}
+
 /** Mengubah baris database menjadi bentuk respons API. */
 export function toPlaceResponse(
   row: PlaceRow,
   foto: string[] = [],
   sudahDiSewa = false,
 ): PlaceResponse {
-  const harga = toNumber(row.harga);
+  const hargaMingguan = row.harga_mingguan === null ? null : toNumber(row.harga_mingguan);
+  const hargaBulanan = row.harga_bulanan === null ? null : toNumber(row.harga_bulanan);
+  const termurah = pilihPaketTermurah(hargaMingguan, hargaBulanan);
 
   return {
     id: row.id,
@@ -63,14 +79,15 @@ export function toPlaceResponse(
     deskripsi: row.deskripsi,
     alamat: row.alamat,
     kecamatan: row.kecamatan,
-    harga,
-    tipe_durasi: row.tipe_durasi,
+    harga_mingguan: hargaMingguan,
+    harga_bulanan: hargaBulanan,
+    harga_terendah: termurah.harga,
+    satuan_terendah: termurah.satuan,
     created_at: row.created_at?.toISOString(),
     updated_at: row.updated_at?.toISOString(),
-    tanggal_mulai_tersedia: row.tanggal_mulai_tersedia ?? null,
-    tanggal_selesai_tersedia: row.tanggal_selesai_tersedia ?? null,
     foto,
     nama_host: row.nama_host,
+    foto_host: row.foto_host ?? null,
     sudah_di_sewa: sudahDiSewa,
     jumlah_foto: row.jumlah_foto === undefined ? foto.length : toNumber(row.jumlah_foto),
   };
@@ -136,15 +153,12 @@ export async function createPlace(
     const result = await client.query<PlaceRow>(
       `INSERT INTO places (
          host_id, nama_tempat, kategori, deskripsi, alamat, kecamatan,
-         harga, tipe_durasi,
-         tanggal_mulai_tersedia, tanggal_selesai_tersedia
+         harga_mingguan, harga_bulanan
        )
-       VALUES ($1::integer, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::date)
+       VALUES ($1::integer, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-                 alamat, kecamatan, harga,
-                 tipe_durasi, created_at, updated_at,
-                 tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
-                 tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia`,
+                alamat, kecamatan, harga_mingguan, harga_bulanan,
+                created_at, updated_at`,
       [
         hostId,
         input.nama_tempat,
@@ -152,10 +166,8 @@ export async function createPlace(
         input.deskripsi,
         input.alamat,
         input.kecamatan,
-        input.harga,
-        input.tipe_durasi,
-        input.tanggal_mulai_tersedia ?? null,
-        input.tanggal_selesai_tersedia ?? null,
+        input.harga_mingguan ?? null,
+        input.harga_bulanan ?? null,
       ],
     );
 
@@ -204,16 +216,20 @@ export async function listPlaces(query: SearchPlaceQuery): Promise<PaginatedResu
     conditions.push(`p.kategori = ${addValue(query.kategori)}`);
   }
 
-  if (query.tipe_durasi) {
-    conditions.push(`p.tipe_durasi = ${addValue(query.tipe_durasi)}`);
+  if (query.durasi === DURATION_TYPE.MINGGUAN) {
+    conditions.push('p.harga_mingguan IS NOT NULL');
+  }
+
+  if (query.durasi === DURATION_TYPE.BULANAN) {
+    conditions.push('p.harga_bulanan IS NOT NULL');
   }
 
   if (query.kecamatan) {
     conditions.push(`p.kecamatan ILIKE ${addValue(`%${query.kecamatan}%`)}`);
   }
 
-  // Filter harga memakai harga sewa.
-  const harga = 'p.harga';
+  // Harga yang dibandingkan adalah paket termurah dari setiap tempat.
+  const harga = 'LEAST(COALESCE(p.harga_mingguan, 999999999), COALESCE(p.harga_bulanan, 999999999))';
 
   if (query.min_harga !== undefined) {
     conditions.push(`${harga} >= ${addValue(query.min_harga)}`);
@@ -374,17 +390,13 @@ export async function updatePlace(
          deskripsi    = COALESCE($5, deskripsi),
          alamat       = COALESCE($6, alamat),
          kecamatan    = COALESCE($7, kecamatan),
-         harga        = COALESCE($8, harga),
-         tipe_durasi  = COALESCE($9, tipe_durasi),
-         tanggal_mulai_tersedia   = CASE WHEN $10::boolean THEN $11::date ELSE tanggal_mulai_tersedia END,
-         tanggal_selesai_tersedia = CASE WHEN $12::boolean THEN $13::date ELSE tanggal_selesai_tersedia END,
+         harga_mingguan = CASE WHEN $8::boolean THEN $9::numeric ELSE harga_mingguan END,
+         harga_bulanan  = CASE WHEN $10::boolean THEN $11::numeric ELSE harga_bulanan END,
          updated_at   = NOW()
          WHERE id = $1::integer AND host_id = $2::integer
          RETURNING id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-               alamat, kecamatan, harga, tipe_durasi,
-               created_at, updated_at,
-               tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
-               tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia`,
+               alamat, kecamatan, harga_mingguan, harga_bulanan,
+               created_at, updated_at`,
     [
       placeId,
       hostId,
@@ -393,12 +405,10 @@ export async function updatePlace(
       input.deskripsi ?? null,
       input.alamat ?? null,
       input.kecamatan ?? null,
-      input.harga ?? null,
-      input.tipe_durasi ?? null,
-      input.tanggal_mulai_tersedia !== undefined,
-      input.tanggal_mulai_tersedia ?? null,
-      input.tanggal_selesai_tersedia !== undefined,
-      input.tanggal_selesai_tersedia ?? null,
+      input.harga_mingguan !== undefined,
+      input.harga_mingguan ?? null,
+      input.harga_bulanan !== undefined,
+      input.harga_bulanan ?? null,
     ],
   );
 
@@ -406,6 +416,12 @@ export async function updatePlace(
 
   if (!place) {
     throw notFound('Tempat tidak ditemukan');
+  }
+
+  // Constraint database menolak tempat tanpa paket; pesan errornya dibuat
+  // lebih jelas untuk Host.
+  if (place.harga_mingguan === null && place.harga_bulanan === null) {
+    throw new AppError('Aktifkan minimal satu paket: mingguan atau bulanan.', 400);
   }
 
   // Auto-daftar kategori custom ke master categories (bila diubah).
@@ -455,10 +471,8 @@ export async function deletePlace(placeId: string, hostId: string): Promise<void
 export async function assertPlaceOwnedBy(placeId: string, hostId: string): Promise<PlaceRow> {
   const result = await pool.query<PlaceRow>(
     `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-            alamat, kecamatan, harga,
-            tipe_durasi, created_at, updated_at,
-             tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
-             tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
+            alamat, kecamatan, harga_mingguan, harga_bulanan,
+            created_at, updated_at
      FROM places
      WHERE id = $1::integer AND host_id = $2::integer
      LIMIT 1`,
@@ -516,6 +530,7 @@ export async function findScheduleConflicts(
 export async function checkAvailability(
   placeId: string,
   tanggalMulai: string,
+  tipeDurasi: DurationType,
   jumlahDurasi: number,
 ): Promise<AvailabilityResult> {
   // Sama seperti createBooking: tanggal lampau selalu ditolak.
@@ -524,9 +539,7 @@ export async function checkAvailability(
   }
 
   const place = await pool.query<PlaceRow>(
-    `SELECT id::text AS id, tipe_durasi,
-            tanggal_mulai_tersedia::text AS tanggal_mulai_tersedia,
-            tanggal_selesai_tersedia::text AS tanggal_selesai_tersedia
+    `SELECT id::text AS id, harga_mingguan, harga_bulanan
      FROM places WHERE id = $1::integer LIMIT 1`,
     [placeId],
   );
@@ -537,20 +550,36 @@ export async function checkAvailability(
     throw notFound('Tempat tidak ditemukan');
   }
 
-  const tanggalSelesai = calculateEndDate(tanggalMulai, row.tipe_durasi, jumlahDurasi);
+  // Pastikan tempat memang menawarkan paket yang diminta.
+  hargaPaket(row, tipeDurasi);
 
-  const periodConflicts = getAvailabilityPeriodConflicts(row, tanggalMulai, tanggalSelesai);
+  const tanggalSelesai = calculateEndDate(tanggalMulai, tipeDurasi, jumlahDurasi);
+
   const konflik = await findScheduleConflicts(placeId, tanggalMulai, tanggalSelesai);
 
-  const allConflicts = [...periodConflicts, ...konflik];
-
   return {
-    tersedia: allConflicts.length === 0,
+    tersedia: konflik.length === 0,
     tanggal_mulai: tanggalMulai,
     tanggal_selesai: tanggalSelesai,
     jumlah_durasi: jumlahDurasi,
-    konflik: allConflicts,
+    konflik,
   };
+}
+
+/** Mengambil harga paket yang dipilih, atau menolak bila paket tidak aktif. */
+export function hargaPaket(
+  place: Pick<PlaceRow, 'harga_mingguan' | 'harga_bulanan'>,
+  tipeDurasi: DurationType,
+): number {
+  const harga =
+    tipeDurasi === DURATION_TYPE.BULANAN ? place.harga_bulanan : place.harga_mingguan;
+
+  if (harga === null || harga === undefined) {
+    const label = tipeDurasi === DURATION_TYPE.BULANAN ? 'bulanan' : 'mingguan';
+    throw new AppError(`Tempat ini tidak menyediakan paket ${label}`, 400);
+  }
+
+  return toNumber(harga);
 }
 
 /**

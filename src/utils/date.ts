@@ -1,4 +1,5 @@
-import type { DurationType } from '../types/domain.js';
+import { HARI_PER_BULAN, HARI_PER_MINGGU } from '../config/constants.js';
+import { DURATION_TYPE, type DurationType } from '../types/domain.js';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -24,24 +25,6 @@ export function addDays(dateString: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** Tambah sejumlah bulan pada tanggal (hasil tetap `YYYY-MM-DD`). */
-export function addMonths(dateString: string, months: number): string {
-  const date = parseDateOnly(dateString);
-  const day = date.getUTCDate();
-
-  date.setUTCDate(1);
-  date.setUTCMonth(date.getUTCMonth() + months);
-
-  // Kembalikan ke tanggal asli bila bulan tujuan lebih pendek.
-  const daysInTargetMonth = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-
-  date.setUTCDate(Math.min(day, daysInTargetMonth));
-
-  return date.toISOString().slice(0, 10);
-}
-
 /** Jumlah hari antara dua tanggal (tanggal akhir ikut dihitung). */
 export function countDays(startDate: string, endDate: string): number {
   const start = parseDateOnly(startDate).getTime();
@@ -51,10 +34,14 @@ export function countDays(startDate: string, endDate: string): number {
 }
 
 /**
- * Menghitung tanggal akhir sewa dari tanggal mulai, satuan durasi, dan
- * jumlah durasi.
+ * Menghitung tanggal akhir sewa dari tanggal mulai, satuan paket, dan
+ * jumlah paket.
  *
- * Contoh (HARIAN, mulai 2026-12-01, jumlah 3): 2026-12-03.
+ * Aturan:
+ *   - 1 minggu = 7 hari
+ *   - 1 bulan = 30 hari (tetap, bukan bulan kalender)
+ *
+ * Contoh: mulai 2026-12-01, 1 bulan -> 2026-12-30.
  * Tanggal awal dan tanggal akhir sama-sama ikut dihitung sebagai hari sewa.
  */
 export function calculateEndDate(
@@ -62,18 +49,9 @@ export function calculateEndDate(
   durationType: DurationType,
   jumlahDurasi: number,
 ): string {
-  switch (durationType) {
-    case 'HARIAN':
-      return addDays(startDate, jumlahDurasi - 1);
-    case 'MINGGUAN':
-      return addDays(startDate, jumlahDurasi * 7 - 1);
-    case 'BULANAN':
-      return addMonths(startDate, jumlahDurasi) === startDate
-        ? startDate
-        : addDays(addMonths(startDate, jumlahDurasi), -1);
-    default:
-      return startDate;
-  }
+  const hariPerPaket = durationType === DURATION_TYPE.BULANAN ? HARI_PER_BULAN : HARI_PER_MINGGU;
+
+  return addDays(startDate, hariPerPaket * jumlahDurasi - 1);
 }
 
 /**

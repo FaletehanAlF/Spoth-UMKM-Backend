@@ -1,7 +1,7 @@
 ﻿import { z } from 'zod';
 
 import { DURATION_TYPE, PLACE_KECAMATANS } from '../types/domain.js';
-import { MAX_PLACE_IMAGES } from '../config/constants.js';
+import { MAX_PLACE_IMAGES, batasPaket } from '../config/constants.js';
 import { dateOnlySchema, paginationQuerySchema } from '../utils/validators.js';
 
 /**
@@ -39,7 +39,10 @@ export const placeBaseSchema = z.object({
     .trim()
     .min(5, 'Kategori minimal 5 karakter')
     .max(50, 'Kategori maksimal 50 karakter'),
-  deskripsi: z.string().trim().min(10, 'Deskripsi minimal 10 karakter').max(250, 'Deskripsi maksimal 250 karakter'),
+  deskripsi: z
+    .string()
+    .trim()
+    .min(30, 'Deskripsi minimal 30 karakter'),
   alamat: z
     .string()
     .trim()
@@ -48,54 +51,44 @@ export const placeBaseSchema = z.object({
   kecamatan: z.enum(PLACE_KECAMATANS, {
     error: 'Kecamatan tempat tidak valid',
   }),
-  harga: z
-    .number({ error: 'Harga harus berupa angka' })
-    .positive('Harga harus lebih besar dari 0')
-    .max(9_999_999_999.99, 'Harga terlalu besar'),
-  tipe_durasi: z.enum(DURATION_TYPE, {
-    error: 'Tipe durasi harus HARIAN, MINGGUAN, atau BULANAN',
-  }),
-  tanggal_mulai_tersedia: dateOnlySchema.optional().nullable(),
-  tanggal_selesai_tersedia: dateOnlySchema.optional().nullable(),
+  harga_mingguan: z
+    .number({ error: 'Harga paket mingguan harus berupa angka' })
+    .positive('Harga paket mingguan harus lebih besar dari 0')
+    .max(9_999_999_999.99, 'Harga paket mingguan terlalu besar')
+    .nullable()
+    .optional(),
+  harga_bulanan: z
+    .number({ error: 'Harga paket bulanan harus berupa angka' })
+    .positive('Harga paket bulanan harus lebih besar dari 0')
+    .max(9_999_999_999.99, 'Harga paket bulanan terlalu besar')
+    .nullable()
+    .optional(),
   foto: z
     .array(photoUrlSchema)
     .max(MAX_PLACE_IMAGES, `Maksimal ${MAX_PLACE_IMAGES} foto`)
     .optional(),
 });
 
-const availabilityPeriodRefinement = (
-  value: { tanggal_mulai_tersedia?: string | null; tanggal_selesai_tersedia?: string | null },
-  ctx: z.RefinementCtx,
-): void => {
-  const mulai = value.tanggal_mulai_tersedia ?? null;
-  const selesai = value.tanggal_selesai_tersedia ?? null;
-
-  if ((mulai === null) !== (selesai === null)) {
-    ctx.addIssue({
-      code: 'custom',
-      path: [mulai === null ? 'tanggal_mulai_tersedia' : 'tanggal_selesai_tersedia'],
-      message: 'Tanggal mulai dan selesai ketersediaan harus diisi bersama',
-    });
-  }
-
-  if (mulai && selesai && selesai < mulai) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['tanggal_selesai_tersedia'],
-      message: 'Tanggal selesai ketersediaan tidak boleh sebelum tanggal mulai',
-    });
-  }
-};
-
 /** Skema tambah tempat (Host). */
 export const createPlaceSchema = placeBaseSchema
-  .superRefine(availabilityPeriodRefinement)
   .superRefine((value, ctx) => {
     if (!value.foto || value.foto.length === 0) {
       ctx.addIssue({
         code: 'custom',
         path: ['foto'],
         message: 'Silakan masukkan minimal 1 foto.',
+      });
+    }
+  })
+  .superRefine((value, ctx) => {
+    const adaMingguan = typeof value.harga_mingguan === 'number';
+    const adaBulanan = typeof value.harga_bulanan === 'number';
+
+    if (!adaMingguan && !adaBulanan) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['harga_mingguan'],
+        message: 'Aktifkan minimal satu paket: mingguan atau bulanan.',
       });
     }
   });
@@ -107,7 +100,6 @@ export type CreatePlacePayload = z.infer<typeof createPlaceSchema>;
  */
 export const updatePlaceSchema = placeBaseSchema
   .partial()
-  .superRefine(availabilityPeriodRefinement)
   .superRefine((value, ctx) => {
     if (value.foto !== undefined && value.foto !== null && value.foto.length === 0) {
       ctx.addIssue({
@@ -136,7 +128,7 @@ export const searchPlaceSchema = paginationQuerySchema.extend({
     .positive('Harga maksimum harus lebih besar dari 0')
     .max(9_999_999_999.99, 'Harga maksimum terlalu besar')
     .optional(),
-  tipe_durasi: z.enum(DURATION_TYPE, { error: 'Tipe durasi tidak valid' }).optional(),
+  durasi: z.enum(DURATION_TYPE, { error: 'Paket durasi tidak valid' }).optional(),
   kecamatan: z.enum(PLACE_KECAMATANS, { error: 'Kecamatan tempat tidak valid' }).optional(),
   sort: z
     .enum(['terbaru', 'terlama', 'harga_asc', 'harga_desc', 'nama'], {
@@ -155,13 +147,27 @@ export const myPlaceSchema = paginationQuerySchema.extend({
 export type MyPlacePayload = z.infer<typeof myPlaceSchema>;
 
 /** Parameter pengecekan ketersediaan jadwal. */
-export const availabilitySchema = z.object({
-  tanggal_mulai: dateOnlySchema,
-  jumlah_durasi: z.coerce
-    .number({ error: 'Jumlah durasi harus berupa angka' })
-    .int('Jumlah durasi harus bilangan bulat')
-    .min(1, 'Jumlah durasi minimal 1')
-    .max(365, 'Jumlah durasi maksimal 365'),
-});
+export const availabilitySchema = z
+  .object({
+    tanggal_mulai: dateOnlySchema,
+    tipe_durasi: z.enum(DURATION_TYPE, {
+      error: 'Paket sewa harus MINGGUAN atau BULANAN',
+    }),
+    jumlah_durasi: z.coerce
+      .number({ error: 'Jumlah paket harus berupa angka' })
+      .int('Jumlah paket harus bilangan bulat')
+      .min(1, 'Jumlah paket minimal 1'),
+  })
+  .superRefine((value, ctx) => {
+    const batas = batasPaket(value.tipe_durasi);
+
+    if (value.jumlah_durasi > batas) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['jumlah_durasi'],
+        message: `Maksimal sewa ${batas} ${value.tipe_durasi === DURATION_TYPE.BULANAN ? 'bulan' : 'minggu'}`,
+      });
+    }
+  });
 
 export type AvailabilityPayload = z.infer<typeof availabilitySchema>;
