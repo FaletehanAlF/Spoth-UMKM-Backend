@@ -63,6 +63,8 @@ export const placeBaseSchema = z.object({
     .max(9_999_999_999.99, 'Harga paket bulanan terlalu besar')
     .nullable()
     .optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
   foto: z
     .array(photoUrlSchema)
     .max(MAX_PLACE_IMAGES, `Maksimal ${MAX_PLACE_IMAGES} foto`)
