@@ -145,6 +145,8 @@ async function terapkanStatusPembayaran(
     tenant_id: string;
     host_id: string;
     nama_tempat: string;
+    admin_fee: string;
+    komisi_platform: string;
     pendapatan_host: string;
   }>(
     `SELECT b.status,
@@ -153,6 +155,8 @@ async function terapkanStatusPembayaran(
             b.tenant_id::text      AS tenant_id,
             p.host_id::text        AS host_id,
             p.nama_tempat          AS nama_tempat,
+            b.admin_fee            AS admin_fee,
+            b.komisi_platform      AS komisi_platform,
             b.pendapatan_host      AS pendapatan_host
      FROM bookings b
      JOIN places p ON p.id = b.place_id
@@ -175,11 +179,16 @@ async function terapkanStatusPembayaran(
     [payment.booking_id, BOOKING_STATUS.LUNAS, kodeBooking],
   );
 
+  const biayaAdmin = toNumber(booking.admin_fee);
+  const komisiPlatform = toNumber(booking.komisi_platform);
+  const pendapatanHost = toNumber(booking.pendapatan_host);
+
   await createNotification(
     client,
     booking.tenant_id,
     'Pembayaran berhasil',
-    `Pembayaran untuk ${booking.nama_tempat} berhasil. Kode booking Anda: ${kodeBooking}.`,
+    `Pembayaran untuk ${booking.nama_tempat} berhasil. Termasuk biaya admin ` +
+      `Rp${biayaAdmin}. Kode booking Anda: ${kodeBooking}.`,
     { booking_id: payment.booking_id, tipe: 'PEMBAYARAN_BERHASIL' },
   );
 
@@ -187,9 +196,9 @@ async function terapkanStatusPembayaran(
     client,
     booking.host_id,
     'Pembayaran diterima',
-    `Tenant telah membayar ${booking.nama_tempat}. Pendapatan Anda: ${toNumber(
-      booking.pendapatan_host,
-    )}.`,
+    `Penyewa membayar ${booking.nama_tempat}. Biaya admin platform ` +
+      `Rp${komisiPlatform} dipotong dari total pembayaran. ` +
+      `Pendapatan Anda: Rp${pendapatanHost}.`,
     { booking_id: payment.booking_id, tipe: 'PEMBAYARAN_BERHASIL' },
   );
 }

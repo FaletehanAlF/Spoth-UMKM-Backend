@@ -16,6 +16,9 @@ export interface PlaceRow {
   harga_mingguan: string | null;
   /** Harga paket bulanan (NULL bila paket ini tidak ditawarkan). */
   harga_bulanan: string | null;
+  /** Koordinat peta (null bila pemilik belum mengisi lokasi). */
+  latitude: number | null;
+  longitude: number | null;
   created_at: Date;
   updated_at: Date;
   /** Nama host, diambil dari tabel `users`. */
@@ -39,6 +42,9 @@ export interface PlaceResponse {
   harga_mingguan: number | null;
   /** Harga paket bulanan (null bila tidak ditawarkan). */
   harga_bulanan: number | null;
+  /** Koordinat peta (null bila pemilik belum mengisi lokasi). */
+  latitude: number | null;
+  longitude: number | null;
   /**
    * Harga paket termurah, untuk ditampilkan di kartu dan untuk pengurutan.
    * Tempat selalu punya minimal satu paket, jadi nilainya tidak pernah null.
@@ -97,6 +103,9 @@ export interface CreatePlaceInput {
   kecamatan: PlaceKecamatan;
   harga_mingguan?: number | null;
   harga_bulanan?: number | null;
+  /** Koordinat peta opsional (null = belum diisi). */
+  latitude?: number | null;
+  longitude?: number | null;
   foto?: string[];
 }
 
@@ -110,6 +119,9 @@ export interface UpdatePlaceInput {
   harga_mingguan?: number | null;
   /** Kirim `null` untuk menonaktifkan paket bulanan. */
   harga_bulanan?: number | null;
+  /** Koordinat peta; kirim `null` untuk menghapus lokasi. */
+  latitude?: number | null;
+  longitude?: number | null;
   foto?: string[];
 }
 

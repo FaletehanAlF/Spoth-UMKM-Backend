@@ -29,6 +29,8 @@ const PLACE_COLUMNS = `
   p.kecamatan           AS kecamatan,
   p.harga_mingguan    AS harga_mingguan,
   p.harga_bulanan     AS harga_bulanan,
+  p.latitude          AS latitude,
+  p.longitude         AS longitude,
   p.created_at          AS created_at,
   p.updated_at          AS updated_at,
   u.nama                AS nama_host,
@@ -42,6 +44,17 @@ function toNumber(value: string | number | null | undefined): number {
   }
 
   return typeof value === 'number' ? value : Number(value);
+}
+
+/** Angka nullable: null tetap null (bukan 0), angka kosong dijadikan null. */
+function toNullableNumber(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const angka = typeof value === 'number' ? value : Number(value);
+
+  return Number.isFinite(angka) ? angka : null;
 }
 
 /**
@@ -81,6 +94,8 @@ export function toPlaceResponse(
     kecamatan: row.kecamatan,
     harga_mingguan: hargaMingguan,
     harga_bulanan: hargaBulanan,
+    latitude: toNullableNumber(row.latitude),
+    longitude: toNullableNumber(row.longitude),
     harga_terendah: termurah.harga,
     satuan_terendah: termurah.satuan,
     created_at: row.created_at?.toISOString(),
@@ -153,11 +168,11 @@ export async function createPlace(
     const result = await client.query<PlaceRow>(
       `INSERT INTO places (
          host_id, nama_tempat, kategori, deskripsi, alamat, kecamatan,
-         harga_mingguan, harga_bulanan
+         harga_mingguan, harga_bulanan, latitude, longitude
        )
-       VALUES ($1::integer, $2, $3, $4, $5, $6, $7, $8)
+       VALUES ($1::integer, $2, $3, $4, $5, $6, $7, $8, $9::float8, $10::float8)
        RETURNING id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-                alamat, kecamatan, harga_mingguan, harga_bulanan,
+                alamat, kecamatan, harga_mingguan, harga_bulanan, latitude, longitude,
                 created_at, updated_at`,
       [
         hostId,
@@ -168,6 +183,8 @@ export async function createPlace(
         input.kecamatan,
         input.harga_mingguan ?? null,
         input.harga_bulanan ?? null,
+        input.latitude ?? null,
+        input.longitude ?? null,
       ],
     );
 
@@ -392,10 +409,12 @@ export async function updatePlace(
          kecamatan    = COALESCE($7, kecamatan),
          harga_mingguan = CASE WHEN $8::boolean THEN $9::numeric ELSE harga_mingguan END,
          harga_bulanan  = CASE WHEN $10::boolean THEN $11::numeric ELSE harga_bulanan END,
+         latitude     = CASE WHEN $12::boolean THEN $13::float8 ELSE latitude END,
+         longitude    = CASE WHEN $14::boolean THEN $15::float8 ELSE longitude END,
          updated_at   = NOW()
          WHERE id = $1::integer AND host_id = $2::integer
          RETURNING id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-               alamat, kecamatan, harga_mingguan, harga_bulanan,
+               alamat, kecamatan, harga_mingguan, harga_bulanan, latitude, longitude,
                created_at, updated_at`,
     [
       placeId,
@@ -409,6 +428,10 @@ export async function updatePlace(
       input.harga_mingguan ?? null,
       input.harga_bulanan !== undefined,
       input.harga_bulanan ?? null,
+      input.latitude !== undefined,
+      input.latitude ?? null,
+      input.longitude !== undefined,
+      input.longitude ?? null,
     ],
   );
 

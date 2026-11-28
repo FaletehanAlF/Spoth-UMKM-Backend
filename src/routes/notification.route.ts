@@ -8,6 +8,7 @@ import {
   getSummary,
   readAllNotifications,
   readNotification,
+  removeAllNotifications,
   removeNotification,
 } from '../controllers/notification.controller.js';
 import { notificationQuerySchema } from '../validators/notification.validation.js';
@@ -19,6 +20,7 @@ notificationRouter.use(authenticate);
 notificationRouter.get('/', validateQuery(notificationQuerySchema), getNotifications);
 notificationRouter.get('/summary', getSummary);
 notificationRouter.post('/read-all', readAllNotifications);
+notificationRouter.delete('/', removeAllNotifications);
 notificationRouter.patch('/:id/read', validateParams(idParamSchema), readNotification);
 notificationRouter.delete('/:id', validateParams(idParamSchema), removeNotification);
 
