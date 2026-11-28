@@ -1,136 +1,137 @@
-import { z } from 'zod';
+﻿import { z } from 'zod';
 
-import {
-  DURATION_TYPE,
-  PLACE_CATEGORY,
-  PLACE_STATUS,
-} from '../types/domain.js';
-import { MAX_PLACE_IMAGES } from '../config/constants.js';
-import { paginationQuerySchema } from '../utils/validators.js';
+import { DURATION_TYPE, PLACE_KECAMATANS } from '../types/domain.js';
+import { MAX_PLACE_IMAGES, batasPaket } from '../config/constants.js';
+import { dateOnlySchema, paginationQuerySchema } from '../utils/validators.js';
 
 /**
- * Fasilitas diterima sebagai teks bebas maupun array teks.
- * Hasilnya selalu disimpan sebagai teks dengan pemisah koma.
+ * URL yang diizinkan untuk `url_foto`.
+ *
+ * Hanya dibolehkan URL yang dapat dikembalikan oleh endpoint
+ * `/api/uploads/photo` atau URL tamu dari Cloudinary (`https://`).
+ * Semua skema `javascript:`, `data:`, `file:` dan lainnya ditolak â€”
+ * jika dikirim, `javascript:` akan eksekusi kode saat dibuka di browser.
  */
-const facilitiesSchema = z
-  .union([z.string(), z.array(z.string())])
-  .transform((value) =>
-    (Array.isArray(value) ? value : value.split(','))
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0)
-      .join(', '),
+const photoUrlSchema = z
+  .string()
+  .trim()
+  .min(1, 'URL foto tidak boleh kosong')
+  .max(255)
+  .refine(
+    (value) =>
+      value.startsWith('/') ||
+      value.startsWith('http://') ||
+      value.startsWith('https://'),
+    {
+      message:
+        'URL foto hanya boleh berupa URL relatif, http:// atau https:// (javascript: dan data: dilarang)',
+    },
   );
-
-/** Alamat foto: boleh URL absolut maupun path relatif dari endpoint upload. */
-const photoSchema = z.string().trim().min(1, 'URL foto tidak boleh kosong').max(255);
 
 export const placeBaseSchema = z.object({
   nama_tempat: z
     .string()
     .trim()
-    .min(1, 'Nama tempat wajib diisi')
+    .min(5, 'Nama tempat minimal 5 karakter')
     .max(150, 'Nama tempat maksimal 150 karakter'),
-  kategori: z.enum(PLACE_CATEGORY, {
-    error: 'Kategori harus LAPAK_USAHA, TERAS_KOMERSIAL, atau BOOTH_EVENT',
-  }),
-  deskripsi: z.string().trim().max(2000, 'Deskripsi terlalu panjang').optional(),
+  kategori: z
+    .string()
+    .trim()
+    .min(5, 'Kategori minimal 5 karakter')
+    .max(50, 'Kategori maksimal 50 karakter'),
+  deskripsi: z
+    .string()
+    .trim()
+    .min(30, 'Deskripsi minimal 30 karakter'),
   alamat: z
     .string()
     .trim()
-    .min(1, 'Alamat wajib diisi')
+    .min(10, 'Alamat minimal 10 karakter')
     .max(255, 'Alamat maksimal 255 karakter'),
-  kota: z.string().trim().min(1, 'Kota wajib diisi').max(80, 'Kota maksimal 80 karakter'),
-  fasilitas: facilitiesSchema.optional(),
-  aturan: z.string().trim().max(2000, 'Aturan terlalu panjang').optional(),
-  harga_normal: z
-    .number({ error: 'Harga normal harus berupa angka' })
-    .positive('Harga normal harus lebih besar dari 0')
-    .max(9_999_999_999.99, 'Harga normal terlalu besar'),
-  harga_promo: z
-    .number({ error: 'Harga promo harus berupa angka' })
-    .positive('Harga promo harus lebih besar dari 0')
-    .max(9_999_999_999.99, 'Harga promo terlalu besar')
-    .optional(),
-  tipe_durasi: z.enum(DURATION_TYPE, {
-    error: 'Tipe durasi harus HARIAN, MINGGUAN, atau BULANAN',
+  kecamatan: z.enum(PLACE_KECAMATANS, {
+    error: 'Kecamatan tempat tidak valid',
   }),
-  status: z.enum(PLACE_STATUS, {
-    error: 'Status harus AKTIF atau NONAKTIF',
-  }).optional(),
-  foto: z.array(photoSchema).max(MAX_PLACE_IMAGES, `Maksimal ${MAX_PLACE_IMAGES} foto`).optional(),
+  harga_mingguan: z
+    .number({ error: 'Harga paket mingguan harus berupa angka' })
+    .positive('Harga paket mingguan harus lebih besar dari 0')
+    .max(9_999_999_999.99, 'Harga paket mingguan terlalu besar')
+    .nullable()
+    .optional(),
+  harga_bulanan: z
+    .number({ error: 'Harga paket bulanan harus berupa angka' })
+    .positive('Harga paket bulanan harus lebih besar dari 0')
+    .max(9_999_999_999.99, 'Harga paket bulanan terlalu besar')
+    .nullable()
+    .optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  foto: z
+    .array(photoUrlSchema)
+    .max(MAX_PLACE_IMAGES, `Maksimal ${MAX_PLACE_IMAGES} foto`)
+    .optional(),
 });
-
-/**
- * Aturan validasi harga (SRS Tabel 4.8 No. 10):
- * "Harga promo lebih besar dari harga normal -> Ditolak dengan pesan validasi".
- *
- * Pada saat menambah tempat, `harga_normal` selalu ikut dikirim sehingga
- * perbandingan bisa dilakukan langsung. Pada saat mengubah tempat, bila
- * `harga_normal` tidak ikut dikirim, pengecekan dilakukan ulang di service
- * terhadap harga normal yang tersimpan di database.
- */
-const hargaRefinement = (
-  value: { harga_normal?: number; harga_promo?: number | null },
-  ctx: z.RefinementCtx,
-): void => {
-  if (
-    value.harga_promo !== undefined &&
-    value.harga_promo !== null &&
-    value.harga_normal !== undefined &&
-    value.harga_promo > value.harga_normal
-  ) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['harga_promo'],
-      message: 'Harga promo tidak boleh lebih besar dari harga normal',
-    });
-  }
-};
 
 /** Skema tambah tempat (Host). */
 export const createPlaceSchema = placeBaseSchema
-  .extend({
-    status: placeBaseSchema.shape.status?.default('AKTIF'),
+  .superRefine((value, ctx) => {
+    if (!value.foto || value.foto.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['foto'],
+        message: 'Silakan masukkan minimal 1 foto.',
+      });
+    }
   })
-  .superRefine(hargaRefinement);
+  .superRefine((value, ctx) => {
+    const adaMingguan = typeof value.harga_mingguan === 'number';
+    const adaBulanan = typeof value.harga_bulanan === 'number';
+
+    if (!adaMingguan && !adaBulanan) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['harga_mingguan'],
+        message: 'Aktifkan minimal satu paket: mingguan atau bulanan.',
+      });
+    }
+  });
 
 export type CreatePlacePayload = z.infer<typeof createPlaceSchema>;
 
 /**
  * Skema ubah tempat (Host). Semua field opsional.
- *
- * `harga_promo` boleh bernilai `null` untuk menghapus harga promo yang
- * sebelumnya ada. `null` berarti "hapus promo", sedangkan field yang tidak
- * dikirim berarti "biarkan apa adanya".
  */
 export const updatePlaceSchema = placeBaseSchema
   .partial()
-  .extend({
-    harga_promo: z
-      .number({ error: 'Harga promo harus berupa angka' })
-      .positive('Harga promo harus lebih besar dari 0')
-      .max(9_999_999_999.99, 'Harga promo terlalu besar')
-      .nullable()
-      .optional(),
-  })
-  .superRefine(hargaRefinement);
+  .superRefine((value, ctx) => {
+    if (value.foto !== undefined && value.foto !== null && value.foto.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['foto'],
+        message: 'Silakan masukkan minimal 1 foto.',
+      });
+    }
+  });
 
 export type UpdatePlacePayload = z.infer<typeof updatePlaceSchema>;
 
 /** Parameter pencarian & filter tempat (Tenant). */
 export const searchPlaceSchema = paginationQuerySchema.extend({
   keyword: z.string().trim().max(100, 'Kata kunci terlalu panjang').optional(),
-  kategori: z.enum(PLACE_CATEGORY, { error: 'Kategori tidak valid' }).optional(),
+  kategori: z.string().trim().min(1, 'Kategori tidak valid').max(50, 'Kategori maksimal 50 karakter').optional(),
   min_harga: z.coerce
     .number({ error: 'Harga minimum harus berupa angka' })
+    .finite('Harga minimum harus berupa angka yang valid')
     .positive('Harga minimum harus lebih besar dari 0')
+    .max(9_999_999_999.99, 'Harga minimum terlalu besar')
     .optional(),
   max_harga: z.coerce
     .number({ error: 'Harga maksimum harus berupa angka' })
+    .finite('Harga maksimum harus berupa angka yang valid')
     .positive('Harga maksimum harus lebih besar dari 0')
+    .max(9_999_999_999.99, 'Harga maksimum terlalu besar')
     .optional(),
-  tipe_durasi: z.enum(DURATION_TYPE, { error: 'Tipe durasi tidak valid' }).optional(),
-  kota: z.string().trim().max(80, 'Kota terlalu panjang').optional(),
+  durasi: z.enum(DURATION_TYPE, { error: 'Paket durasi tidak valid' }).optional(),
+  kecamatan: z.enum(PLACE_KECAMATANS, { error: 'Kecamatan tempat tidak valid' }).optional(),
   sort: z
     .enum(['terbaru', 'terlama', 'harga_asc', 'harga_desc', 'nama'], {
       error: 'Urutan tidak valid',
@@ -143,21 +144,32 @@ export type SearchPlacePayload = z.infer<typeof searchPlaceSchema>;
 /** Parameter daftar tempat milik Host. */
 export const myPlaceSchema = paginationQuerySchema.extend({
   keyword: z.string().trim().max(100, 'Kata kunci terlalu panjang').optional(),
-  status: z.enum(PLACE_STATUS, { error: 'Status tidak valid' }).optional(),
 });
 
 export type MyPlacePayload = z.infer<typeof myPlaceSchema>;
 
 /** Parameter pengecekan ketersediaan jadwal. */
-export const availabilitySchema = z.object({
-  tanggal_mulai: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal harus YYYY-MM-DD'),
-  jumlah_durasi: z.coerce
-    .number({ error: 'Jumlah durasi harus berupa angka' })
-    .int('Jumlah durasi harus bilangan bulat')
-    .min(1, 'Jumlah durasi minimal 1')
-    .max(365, 'Jumlah durasi maksimal 365'),
-});
+export const availabilitySchema = z
+  .object({
+    tanggal_mulai: dateOnlySchema,
+    tipe_durasi: z.enum(DURATION_TYPE, {
+      error: 'Paket sewa harus MINGGUAN atau BULANAN',
+    }),
+    jumlah_durasi: z.coerce
+      .number({ error: 'Jumlah paket harus berupa angka' })
+      .int('Jumlah paket harus bilangan bulat')
+      .min(1, 'Jumlah paket minimal 1'),
+  })
+  .superRefine((value, ctx) => {
+    const batas = batasPaket(value.tipe_durasi);
+
+    if (value.jumlah_durasi > batas) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['jumlah_durasi'],
+        message: `Maksimal sewa ${batas} ${value.tipe_durasi === DURATION_TYPE.BULANAN ? 'bulan' : 'minggu'}`,
+      });
+    }
+  });
 
 export type AvailabilityPayload = z.infer<typeof availabilitySchema>;

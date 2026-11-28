@@ -1,7 +1,7 @@
-import type {
+﻿import type {
   DurationType,
   PlaceCategory,
-  PlaceStatus,
+  PlaceKecamatan,
 } from './domain.js';
 
 export interface PlaceRow {
@@ -9,50 +9,57 @@ export interface PlaceRow {
   host_id: string;
   nama_tempat: string;
   kategori: PlaceCategory;
-  deskripsi: string | null;
+  deskripsi: string;
   alamat: string;
-  kota: string;
-  fasilitas: string | null;
-  aturan: string | null;
-  harga_normal: string;
-  harga_promo: string | null;
-  tipe_durasi: DurationType;
-  status: PlaceStatus;
+  kecamatan: PlaceKecamatan;
+  /** Harga paket mingguan (NULL bila paket ini tidak ditawarkan). */
+  harga_mingguan: string | null;
+  /** Harga paket bulanan (NULL bila paket ini tidak ditawarkan). */
+  harga_bulanan: string | null;
+  /** Koordinat peta (null bila pemilik belum mengisi lokasi). */
+  latitude: number | null;
+  longitude: number | null;
   created_at: Date;
   updated_at: Date;
   /** Nama host, diambil dari tabel `users`. */
   nama_host?: string;
-  /** Harga yang benar-benar dipakai (promo bila ada). */
-  harga_efektif?: string;
+  /** URL foto profil host (bisa kosong bila belum diunggah). */
+  foto_host?: string | null;
   /** Jumlah foto tempat. */
   jumlah_foto?: string;
 }
 
-/**
- * Bentuk data tempat yang dikirim ke frontend.
- * `fasilitas` disimpan sebagai teks di database, lalu dikirim juga dalam
- * bentuk array supaya lebih mudah ditampilkan di Flutter Web.
- */
+/** Bentuk data tempat yang dikirim ke frontend. */
 export interface PlaceResponse {
   id: string;
   host_id: string;
   nama_tempat: string;
   kategori: PlaceCategory;
-  deskripsi: string | null;
+  deskripsi: string;
   alamat: string;
-  kota: string;
-  fasilitas: string | null;
-  fasilitas_list: string[];
-  aturan: string | null;
-  harga_normal: number;
-  harga_promo: number | null;
-  harga_efektif: number;
-  tipe_durasi: DurationType;
-  status: PlaceStatus;
+  kecamatan: PlaceKecamatan;
+  /** Harga paket mingguan (null bila tidak ditawarkan). */
+  harga_mingguan: number | null;
+  /** Harga paket bulanan (null bila tidak ditawarkan). */
+  harga_bulanan: number | null;
+  /** Koordinat peta (null bila pemilik belum mengisi lokasi). */
+  latitude: number | null;
+  longitude: number | null;
+  /**
+   * Harga paket termurah, untuk ditampilkan di kartu dan untuk pengurutan.
+   * Tempat selalu punya minimal satu paket, jadi nilainya tidak pernah null.
+   */
+  harga_terendah: number;
+  /** Satuan dari paket termurah ("MINGGUAN" atau "BULANAN"). */
+  satuan_terendah: DurationType;
   created_at: string;
   updated_at: string;
   foto: string[];
   nama_host?: string;
+  /** Foto profil pemilik tempat. */
+  foto_host?: string | null;
+  /** True bila tempat sedang memiliki pemesanan aktif. */
+  sudah_di_sewa: boolean;
   jumlah_foto?: number;
 }
 
@@ -70,43 +77,51 @@ export interface PlaceDetailResponse extends PlaceResponse {
   total_pendapatan?: number;
 }
 
+/** Pendapatan bersih host pada satu bulan (untuk grafik dashboard). */
+export interface MonthlyRevenue {
+  /** Format YYYY-MM, contoh "2026-06". */
+  bulan: string;
+  pendapatan: number;
+}
+
 export interface PlaceSummaryResponse {
   total_tempat: number;
-  tempat_aktif: number;
   total_pemesanan: number;
   pemesanan_menunggu: number;
   pemesanan_lunas: number;
   total_pendapatan: number;
   total_komisi: number;
+  /** Pendapatan bersih per bulan dari semua aktivitas pemesanan lunas. */
+  pendapatan_bulanan: MonthlyRevenue[];
 }
 
 export interface CreatePlaceInput {
   nama_tempat: string;
   kategori: PlaceCategory;
-  deskripsi?: string;
+  deskripsi: string;
   alamat: string;
-  kota: string;
-  fasilitas?: string;
-  aturan?: string;
-  harga_normal: number;
-  harga_promo?: number;
-  tipe_durasi: DurationType;
-  status?: PlaceStatus;
+  kecamatan: PlaceKecamatan;
+  harga_mingguan?: number | null;
+  harga_bulanan?: number | null;
+  /** Koordinat peta opsional (null = belum diisi). */
+  latitude?: number | null;
+  longitude?: number | null;
   foto?: string[];
 }
 
 export interface UpdatePlaceInput {
   nama_tempat?: string;
-  kategori?: PlaceCategory;
+  kategori?: string;
   deskripsi?: string;
   alamat?: string;
-  kota?: string;
-  fasilitas?: string;
-  aturan?: string;
-  harga_normal?: number;
-  harga_promo?: number | null;
-  tipe_durasi?: DurationType;
-  status?: PlaceStatus;
+  kecamatan?: PlaceKecamatan;
+  /** Kirim `null` untuk menonaktifkan paket mingguan. */
+  harga_mingguan?: number | null;
+  /** Kirim `null` untuk menonaktifkan paket bulanan. */
+  harga_bulanan?: number | null;
+  /** Koordinat peta; kirim `null` untuk menghapus lokasi. */
+  latitude?: number | null;
+  longitude?: number | null;
   foto?: string[];
 }
 
@@ -115,8 +130,9 @@ export interface SearchPlaceQuery {
   kategori?: PlaceCategory;
   min_harga?: number;
   max_harga?: number;
-  tipe_durasi?: DurationType;
-  kota?: string;
+  /** Hanya tampilkan tempat yang menawarkan paket ini. */
+  durasi?: DurationType;
+  kecamatan?: PlaceKecamatan;
   sort?: 'terbaru' | 'terlama' | 'harga_asc' | 'harga_desc' | 'nama';
   page: number;
   limit: number;
@@ -124,14 +140,8 @@ export interface SearchPlaceQuery {
 
 export interface MyPlaceQuery {
   keyword?: string;
-  status?: PlaceStatus;
   page: number;
   limit: number;
-}
-
-export interface AvailabilityQuery {
-  tanggal_mulai: string;
-  jumlah_durasi: number;
 }
 
 export interface AvailabilityResult {
@@ -141,3 +151,6 @@ export interface AvailabilityResult {
   jumlah_durasi: number;
   konflik: BookedRange[];
 }
+
+
+

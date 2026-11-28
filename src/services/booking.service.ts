@@ -1,18 +1,18 @@
-import { pool, withTransaction } from '../config/database.js';
-import { COMMISSION_RATE } from '../config/constants.js';
+﻿import { pool, withTransaction } from '../config/database.js';
+import { ADMIN_FEE } from '../config/constants.js';
 import type { Queryable } from '../types/database.js';
 import {
   ACTIVE_BOOKING_STATUSES,
   BOOKING_CODE_PREFIX,
   BOOKING_STATUS,
+  getBookingStatusLabel,
+  type DurationType,
 } from '../types/domain.js';
 import { AppError, conflict, forbidden, notFound } from '../utils/app-error.js';
 import { calculateEndDate, today } from '../utils/date.js';
 import { buildPaginatedResult, toOffset, type PaginatedResult } from '../utils/pagination.js';
 import { calculatePrice } from '../utils/pricing.js';
-import {
-  findScheduleConflicts,
-} from './place.service.js';
+import { findScheduleConflicts, hargaPaket } from './place.service.js';
 import type { PlaceRow } from '../types/place.types.js';
 import { createNotification } from './notification.service.js';
 import type {
@@ -33,7 +33,9 @@ const BOOKING_COLUMNS = `
   b.tanggal_mulai::text   AS tanggal_mulai,
   b.tanggal_selesai::text AS tanggal_selesai,
   b.jumlah_durasi         AS jumlah_durasi,
+  b.tipe_durasi           AS tipe_durasi,
   b.total_harga           AS total_harga,
+  b.admin_fee             AS admin_fee,
   b.komisi_platform       AS komisi_platform,
   b.pendapatan_host       AS pendapatan_host,
   b.status                AS status,
@@ -41,7 +43,7 @@ const BOOKING_COLUMNS = `
   p.nama_tempat           AS nama_tempat,
   p.kategori              AS kategori,
   p.alamat                AS alamat,
-  p.kota                  AS kota,
+  p.kecamatan                  AS kecamatan,
   p.host_id::text         AS host_id,
   tenant.nama             AS nama_tenant,
   host.nama               AS nama_host,
@@ -60,6 +62,8 @@ function toNumber(value: string | number | null | undefined): number {
 /** Mengubah baris database menjadi bentuk respons API. */
 export function toBookingResponse(row: BookingRow): BookingResponse {
   const totalHarga = toNumber(row.total_harga);
+  const adminFee = toNumber(row.admin_fee);
+  const hargaSewa = totalHarga - adminFee;
 
   return {
     id: row.id,
@@ -71,19 +75,24 @@ export function toBookingResponse(row: BookingRow): BookingResponse {
     tanggal_mulai: row.tanggal_mulai,
     tanggal_selesai: row.tanggal_selesai,
     jumlah_durasi: row.jumlah_durasi,
-    // Harga per satuan diturunkan dari total harga agar selalu konsisten
-    // dengan rincian biaya yang tersimpan.
+    tipe_durasi: row.tipe_durasi,
+    // selalu konsisten dengan rincian biaya yang tersimpan.
     harga_satuan:
-      row.jumlah_durasi > 0 ? Math.round((totalHarga / row.jumlah_durasi) * 100) / 100 : 0,
+      row.jumlah_durasi > 0 ? Math.round((hargaSewa / row.jumlah_durasi) * 100) / 100 : 0,
     total_harga: totalHarga,
+    admin_fee: adminFee,
     komisi_platform: toNumber(row.komisi_platform),
     pendapatan_host: toNumber(row.pendapatan_host),
     status: row.status,
+    status_label: getBookingStatusLabel(row.status),
+    // E-Pass hanya tersedia setelah lunas, karena kode booking dibuat saat
+    // pembayaran berhasil (sama dengan aturan pada epass.service.ts).
+    epass_tersedia: row.status === BOOKING_STATUS.LUNAS && Boolean(row.kode_booking),
     created_at: row.created_at?.toISOString(),
     nama_tempat: row.nama_tempat,
     kategori: row.kategori,
     alamat: row.alamat,
-    kota: row.kota,
+    kecamatan: row.kecamatan,
     nama_tenant: row.nama_tenant,
     nama_host: row.nama_host,
     foto: row.foto ?? [],
@@ -122,11 +131,11 @@ export async function generateKodeBooking(
  * Membuat pemesanan baru (SRS Tabel 3.1 Fitur "Pemesanan").
  *
  * Alur:
- * 1. Validasi tempat tersedia dan berstatus AKTIF.
+ * 1. Validasi tempat ada dan masih dalam periode ketersediaan.
  * 2. Mengunci baris tempat (`SELECT ... FOR UPDATE`) supaya dua permintaan
  *    bersamaan untuk tempat yang sama tidak bisa lolos pengecekan jadwal.
  * 3. Mengecek bentrok jadwal (Fitur "Validasi Ketersediaan").
- * 4. Menghitung total harga, komisi 10%, dan pendapatan host.
+ * 4. Menghitung harga sewa, biaya admin, dan pendapatan host.
  * 5. Menyimpan pemesanan dengan status MENUNGGU_PEMBAYARAN.
  */
 export async function createBooking(
@@ -143,8 +152,8 @@ export async function createBooking(
     // Kunci baris tempat: semua pemesanan untuk tempat ini akan berurutan.
     const placeResult = await client.query<PlaceRow>(
       `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-              alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
-              tipe_durasi, status, created_at, updated_at
+              alamat, kecamatan, harga_mingguan, harga_bulanan,
+              created_at, updated_at
        FROM places
        WHERE id = $1::integer
        FOR UPDATE`,
@@ -157,17 +166,16 @@ export async function createBooking(
       throw notFound('Tempat tidak ditemukan');
     }
 
-    if (place.status !== 'AKTIF') {
-      throw new AppError('Tempat sedang tidak aktif dan tidak bisa dipesan', 400);
-    }
-
     if (place.host_id === tenantId) {
       throw new AppError('Anda tidak bisa menyewa tempat milik Anda sendiri', 400);
     }
 
+    // Harga per paket mengikuti satuan yang dipilih penyewa.
+    const hargaPerPaket = hargaPaket(place, input.tipe_durasi);
+
     const tanggalSelesai = calculateEndDate(
       input.tanggal_mulai,
-      place.tipe_durasi,
+      input.tipe_durasi,
       input.jumlah_durasi,
     );
 
@@ -187,25 +195,21 @@ export async function createBooking(
       );
     }
 
-    // Hitung rincian biaya sesuai aturan SRS Subbab 3.3.6.
-    const harga = calculatePrice(
-      toNumber(place.harga_normal),
-      place.harga_promo === null ? null : toNumber(place.harga_promo),
-      input.jumlah_durasi,
-      COMMISSION_RATE,
-    );
+    // Hitung rincian biaya: harga paket x jumlah paket + biaya admin platform.
+    const harga = calculatePrice(hargaPerPaket, input.jumlah_durasi, ADMIN_FEE);
 
     const insertResult = await client.query<BookingRow>(
       `INSERT INTO bookings (
          place_id, tenant_id, jenis_usaha, tanggal_mulai, tanggal_selesai,
-         jumlah_durasi, total_harga, komisi_platform, pendapatan_host, status
+         jumlah_durasi, tipe_durasi, total_harga, admin_fee, komisi_platform,
+         pendapatan_host, status
        )
-       VALUES ($1::integer, $2::integer, $3, $4::date, $5::date, $6, $7, $8, $9, $10)
+       VALUES ($1::integer, $2::integer, $3, $4::date, $5::date, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id::text AS id, kode_booking, place_id::text AS place_id,
                  tenant_id::text AS tenant_id, jenis_usaha,
                  tanggal_mulai::text AS tanggal_mulai, tanggal_selesai::text AS tanggal_selesai,
-                 jumlah_durasi, total_harga, komisi_platform, pendapatan_host,
-                 status, created_at`,
+                 jumlah_durasi, tipe_durasi, total_harga, admin_fee, komisi_platform,
+                 pendapatan_host, status, created_at`,
       [
         placeId,
         tenantId,
@@ -213,7 +217,9 @@ export async function createBooking(
         input.tanggal_mulai,
         tanggalSelesai,
         input.jumlah_durasi,
+        input.tipe_durasi,
         harga.total_harga,
+        harga.admin_fee,
         harga.komisi_platform,
         harga.pendapatan_host,
         BOOKING_STATUS.MENUNGGU_PEMBAYARAN,
@@ -235,7 +241,7 @@ export async function createBooking(
       { booking_id: booking.id, tipe: 'PEMESANAN_BARU' },
     );
 
-    return { booking, place };
+    return { booking };
   });
 
   const booking = await getBookingById(result.booking.id, tenantId, 'TENANT');
@@ -245,8 +251,12 @@ export async function createBooking(
 
 /**
  * Mengambil satu pemesanan.
- * Tenant hanya boleh melihat pemesanan miliknya, Host hanya pemesanan pada
- * tempatnya sendiri.
+ *
+ * Hardening default-deny: hanya boleh diakses oleh:
+ * - `TENANT` yang merupakan `b.tenant_id`, atau
+ * - `HOST` yang merupakan `p.host_id` (pemilik tempat).
+ *
+ * Role apa pun selain keduanya ditolak 403 (aman untuk tambahan role).
  */
 export async function getBookingById(
   bookingId: string,
@@ -273,12 +283,15 @@ export async function getBookingById(
   const isOwnerTenant = booking.tenant_id === requesterId;
   const isOwnerHost = booking.host_id === requesterId;
 
-  if (requesterRole === 'TENANT' && !isOwnerTenant) {
-    throw forbidden('Anda tidak bisa melihat pemesanan milik pengguna lain');
-  }
+  // Pola default-deny: hanya role TENANT yang menjadi `tenant_id`, atau
+  // role HOST yang menjadi `host_id`, yang boleh membaca. Semua role lain
+  // (seperti role baru di masa depan) tidak dapat mengakses.
+  const isAllowed =
+    (requesterRole === 'TENANT' && isOwnerTenant) ||
+    (requesterRole === 'HOST' && isOwnerHost);
 
-  if (requesterRole === 'HOST' && !isOwnerHost) {
-    throw forbidden('Anda hanya bisa melihat pemesanan pada tempat Anda sendiri');
+  if (!isAllowed) {
+    throw forbidden('Anda tidak diizinkan membaca pemesanan ini');
   }
 
   return toBookingResponse(booking);
@@ -308,6 +321,16 @@ export async function listBookings(
   if (query.status) {
     values.push(query.status);
     conditions.push(`b.status = $${values.length}`);
+  }
+
+  if (query.kode_booking) {
+    values.push(`%${query.kode_booking}%`);
+    conditions.push(`b.kode_booking ILIKE $${values.length}`);
+  }
+
+  if (query.tanggal_mulai) {
+    values.push(query.tanggal_mulai);
+    conditions.push(`b.tanggal_mulai = $${values.length}::date`);
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -356,7 +379,7 @@ export async function cancelBooking(
     `SELECT id::text AS id, kode_booking, place_id::text AS place_id,
             tenant_id::text AS tenant_id, jenis_usaha,
             tanggal_mulai::text AS tanggal_mulai, tanggal_selesai::text AS tanggal_selesai,
-            jumlah_durasi, total_harga, komisi_platform, pendapatan_host,
+            jumlah_durasi, total_harga, admin_fee, komisi_platform, pendapatan_host,
             status, created_at
      FROM bookings
      WHERE id = $1::integer
@@ -378,10 +401,26 @@ export async function cancelBooking(
     throw new AppError('Pemesanan ini sudah dibatalkan', 400);
   }
 
-  await pool.query(
-    `UPDATE bookings SET status = $2 WHERE id = $1::integer`,
-    [bookingId, BOOKING_STATUS.DIBATALKAN],
+  if (booking.status === BOOKING_STATUS.LUNAS) {
+    throw new AppError('Pemesanan yang sudah lunas tidak dapat dibatalkan', 400);
+  }
+
+  if (booking.status !== BOOKING_STATUS.MENUNGGU_PEMBAYARAN) {
+    throw new AppError('Pemesanan hanya dapat dibatalkan jika berstatus menunggu pembayaran', 400);
+  }
+
+  const updateResult = await pool.query(
+    `UPDATE bookings
+     SET status = $2
+     WHERE id = $1::integer
+       AND status = $3
+     RETURNING id`,
+    [bookingId, BOOKING_STATUS.DIBATALKAN, BOOKING_STATUS.MENUNGGU_PEMBAYARAN],
   );
+
+  if ((updateResult.rowCount ?? 0) === 0) {
+    throw new AppError('Pemesanan ini sudah tidak dapat dibatalkan', 400);
+  }
 
   const placeResult = await pool.query<{ host_id: string; nama_tempat: string }>(
     `SELECT host_id::text AS host_id, nama_tempat FROM places WHERE id = $1::integer`,
@@ -404,18 +443,98 @@ export async function cancelBooking(
 }
 
 /**
+ * Membatalkan pemesanan oleh Pemilik tempat (jalur operasional untuk
+ * membersihkan pemesanan yang masih menunggu pembayaran).
+ *
+ * Hanya pemesanan berstatus MENUNGGU_PEMBAYARAN yang boleh dibatalkan.
+ * Pemilik hanya boleh membatalkan pemesanan pada tempat miliknya sendiri.
+ */
+export async function cancelBookingByHost(
+  bookingId: string,
+  hostId: string,
+): Promise<BookingResponse> {
+  const result = await pool.query<{
+    id: string;
+    tenant_id: string;
+    place_id: string;
+    status: string;
+    host_id: string;
+    nama_tempat: string;
+  }>(
+    `SELECT b.id::text AS id, b.tenant_id::text AS tenant_id,
+            b.place_id::text AS place_id, b.status,
+            p.host_id::text AS host_id, p.nama_tempat
+     FROM bookings b
+     JOIN places p ON p.id = b.place_id
+     WHERE b.id = $1::integer
+     LIMIT 1`,
+    [bookingId],
+  );
+
+  const booking = result.rows[0];
+
+  if (!booking) {
+    throw notFound('Pemesanan tidak ditemukan');
+  }
+
+  if (booking.host_id !== hostId) {
+    throw forbidden('Anda hanya bisa membatalkan pemesanan pada tempat Anda sendiri');
+  }
+
+  const updateResult = await pool.query(
+    `UPDATE bookings
+     SET status = $2
+     WHERE id = $1::integer
+       AND status = $3
+     RETURNING id`,
+    [bookingId, BOOKING_STATUS.DIBATALKAN, BOOKING_STATUS.MENUNGGU_PEMBAYARAN],
+  );
+
+  if ((updateResult.rowCount ?? 0) === 0) {
+    if (booking.status === BOOKING_STATUS.DIBATALKAN) {
+      throw new AppError('Pemesanan ini sudah dibatalkan', 400);
+    }
+
+    if (booking.status === BOOKING_STATUS.LUNAS) {
+      throw new AppError('Pemesanan yang sudah lunas tidak dapat dibatalkan', 400);
+    }
+
+    throw new AppError(
+      'Pemesanan hanya dapat dibatalkan jika berstatus menunggu pembayaran',
+      400,
+    );
+  }
+
+  await createNotification(
+    pool,
+    booking.tenant_id,
+    'Pemesanan dibatalkan oleh pemilik',
+    `Pemesanan ${booking.nama_tempat} telah dibatalkan oleh pemilik tempat.`,
+    { booking_id: booking.id, tipe: 'PEMESANAN_DIBATALKAN' },
+  );
+
+  return getBookingById(bookingId, hostId, 'HOST');
+}
+
+/**
  * Menghitung pratinjau biaya sebelum Tenant menekan tombol pesan.
  * Dipakai pada halaman "Form Pemesanan" untuk menampilkan rincian tagihan.
  */
 export async function previewPrice(
   placeId: string,
   tanggalMulai: string,
+  tipeDurasi: DurationType,
   jumlahDurasi: number,
+  tenantId?: string,
 ): Promise<PricePreviewResponse> {
+  if (tanggalMulai < today()) {
+    throw new AppError('Tanggal mulai sewa tidak boleh di masa lalu', 400);
+  }
+
   const result = await pool.query<PlaceRow>(
     `SELECT id::text AS id, host_id::text AS host_id, nama_tempat, kategori, deskripsi,
-            alamat, kota, fasilitas, aturan, harga_normal, harga_promo,
-            tipe_durasi, status, created_at, updated_at
+            alamat, kecamatan, harga_mingguan, harga_bulanan,
+            created_at, updated_at
      FROM places
      WHERE id = $1::integer
      LIMIT 1`,
@@ -428,15 +547,19 @@ export async function previewPrice(
     throw notFound('Tempat tidak ditemukan');
   }
 
-  const tanggalSelesai = calculateEndDate(tanggalMulai, place.tipe_durasi, jumlahDurasi);
-  const konflik = await findScheduleConflicts(placeId, tanggalMulai, tanggalSelesai);
+  if (tenantId && place.host_id === tenantId) {
+    throw new AppError('Anda tidak bisa menyewa tempat milik Anda sendiri', 400);
+  }
 
-  const harga = calculatePrice(
-    toNumber(place.harga_normal),
-    place.harga_promo === null ? null : toNumber(place.harga_promo),
-    jumlahDurasi,
-    COMMISSION_RATE,
-  );
+  const hargaPerPaket = hargaPaket(place, tipeDurasi);
+
+  const tanggalSelesai = calculateEndDate(tanggalMulai, tipeDurasi, jumlahDurasi);
+
+  const scheduleConflicts = await findScheduleConflicts(placeId, tanggalMulai, tanggalSelesai);
+
+  const konflik = scheduleConflicts;
+
+  const harga = calculatePrice(hargaPerPaket, jumlahDurasi, ADMIN_FEE);
 
   return {
     place_id: place.id,
@@ -444,11 +567,10 @@ export async function previewPrice(
     tanggal_mulai: tanggalMulai,
     tanggal_selesai: tanggalSelesai,
     jumlah_durasi: jumlahDurasi,
-    tipe_durasi: place.tipe_durasi,
+    tipe_durasi: tipeDurasi,
     harga_satuan: harga.harga_satuan,
-    harga_normal: toNumber(place.harga_normal),
-    harga_promo: place.harga_promo === null ? null : toNumber(place.harga_promo),
     total_harga: harga.total_harga,
+    admin_fee: harga.admin_fee,
     komisi_platform: harga.komisi_platform,
     pendapatan_host: harga.pendapatan_host,
     tersedia: konflik.length === 0,
@@ -458,3 +580,5 @@ export async function previewPrice(
 
 /** Status pemesanan yang masih memblokir jadwal. */
 export const blockingStatuses = ACTIVE_BOOKING_STATUSES;
+
+

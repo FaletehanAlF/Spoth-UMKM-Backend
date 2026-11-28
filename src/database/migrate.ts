@@ -63,6 +63,18 @@ async function migrate(): Promise<void> {
 
     try {
       await client.query('BEGIN');
+
+      // Migrasi destruktif (mis. reset skema legacy) hanya boleh berjalan
+      // bila operator mengaktifkannya secara eksplisit. Flag ini tidak
+      // mengubah koneksi database; ia hanya men-set GUC sesi transaksi
+      // sehingga berkas migrasi dapat memeriksanya dengan aman.
+      if (process.env.ALLOW_DESTRUCTIVE_MIGRATION === 'true') {
+        console.warn(
+          '[migrate] ALLOW_DESTRUCTIVE_MIGRATION=true — migrasi destruktif diizinkan untuk sesi ini.',
+        );
+        await client.query("SELECT set_config('app.allow_destructive_reset', 'on', true)");
+      }
+
       await client.query(sql);
       await client.query(
         'INSERT INTO app_meta.schema_migrations (filename) VALUES ($1)',
@@ -92,7 +104,7 @@ migrate()
     await closeDatabasePool();
     process.exit(0);
   })
-  .catch(async (error) => {
+  .catch(async () => {
     console.error('[migrate] Migrasi dibatalkan karena terjadi error.');
     await closeDatabasePool();
     process.exit(1);

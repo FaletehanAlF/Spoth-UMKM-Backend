@@ -16,6 +16,21 @@ export const authLimiter = rateLimit({
 });
 
 /**
+ * Pembatas khusus upload gambar.
+ * Mencegah penyalahgunaan penyimpanan Cloudinary / kuota.
+ */
+export const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 40,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Terlalu banyak unggahan. Silakan coba lagi beberapa menit lagi.',
+  },
+});
+
+/**
  * Pembatas umum untuk seluruh API.
  * Nilainya dibuat tinggi supaya tidak mengganggu penggunaan normal.
  */

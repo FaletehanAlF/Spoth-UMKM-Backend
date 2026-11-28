@@ -36,7 +36,7 @@ export const searchPlaces = asyncHandler(
 
 /**
  * GET /api/places/:id
- * Detail tempat: foto, fasilitas, aturan, lokasi, harga, dan ketersediaan.
+ * Detail tempat: foto, aturan, lokasi, harga, dan ketersediaan.
  */
 export const getPlace = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
@@ -56,6 +56,7 @@ export const getAvailability = asyncHandler(
     const result = await checkAvailability(
       paramString(req.params.id),
       query.tanggal_mulai,
+      query.tipe_durasi,
       query.jumlah_durasi,
     );
 

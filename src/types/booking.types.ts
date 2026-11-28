@@ -1,4 +1,4 @@
-import type { BookingStatus } from './domain.js';
+﻿import type { BookingStatus, DurationType } from './domain.js';
 
 export interface BookingRow {
   id: string;
@@ -10,7 +10,10 @@ export interface BookingRow {
   tanggal_mulai: string;
   tanggal_selesai: string;
   jumlah_durasi: number;
+  /** Satuan paket yang dipilih penyewa saat memesan. */
+  tipe_durasi: DurationType;
   total_harga: string;
+  admin_fee: string;
   komisi_platform: string;
   pendapatan_host: string;
   status: BookingStatus;
@@ -19,7 +22,7 @@ export interface BookingRow {
   nama_tempat?: string;
   kategori?: string;
   alamat?: string;
-  kota?: string;
+  kecamatan?: string;
   /** Nama penyewa (dari tabel `users`). */
   nama_tenant?: string;
   nama_host?: string;
@@ -40,16 +43,25 @@ export interface BookingResponse {
   tanggal_mulai: string;
   tanggal_selesai: string;
   jumlah_durasi: number;
+  tipe_durasi: DurationType;
   harga_satuan: number;
   total_harga: number;
+  admin_fee: number;
   komisi_platform: number;
   pendapatan_host: number;
   status: BookingStatus;
+  /** Label status siap tampil, contoh: "Berhasil Disewa" untuk status LUNAS. */
+  status_label: string;
+  /**
+   * True bila E-Pass sudah bisa dibuka (pemesanan lunas dan punya kode booking).
+   * Frontend cukup memanggil `GET /api/epass/:id` saat nilai ini true.
+   */
+  epass_tersedia: boolean;
   created_at: string;
   nama_tempat?: string;
   kategori?: string;
   alamat?: string;
-  kota?: string;
+  kecamatan?: string;
   nama_tenant?: string;
   nama_host?: string;
   foto?: string[];
@@ -58,13 +70,15 @@ export interface BookingResponse {
 export interface CreateBookingInput {
   place_id: number;
   tanggal_mulai: string;
+  tipe_durasi: DurationType;
   jumlah_durasi: number;
   jenis_usaha: string;
-  tanggal_selesai?: string;
 }
 
 export interface BookingQuery {
   status?: BookingStatus;
+  kode_booking?: string;
+  tanggal_mulai?: string;
   page: number;
   limit: number;
 }
@@ -75,13 +89,14 @@ export interface PricePreviewResponse {
   tanggal_mulai: string;
   tanggal_selesai: string;
   jumlah_durasi: number;
-  tipe_durasi: string;
+  tipe_durasi: DurationType;
   harga_satuan: number;
-  harga_normal: number;
-  harga_promo: number | null;
   total_harga: number;
+  admin_fee: number;
   komisi_platform: number;
   pendapatan_host: number;
   tersedia: boolean;
   konflik: { tanggal_mulai: string; tanggal_selesai: string; status: string }[];
 }
+
+

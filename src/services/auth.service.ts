@@ -15,15 +15,23 @@ import type {
 
 const SALT_ROUNDS = 12;
 
-/** Baris tabel `users` sesuai skema SRS Tabel 4.2. */
+/**
+ * Hash dummy untuk menyamakan waktu respons ketika email tidak ditemukan.
+ * Nilainya bukan rahasia dan tidak terhubung ke akun mana pun.
+ */
+const DUMMY_PASSWORD_HASH =
+  '$2b$12$wHXqJbLc8C0.1D4n994m3.1Ttt7EVN.4AdtmH4uOvJtVxtgLQdTE.';
+
 export interface UserRow {
   id: string;
   nama: string;
   email: string;
   password_hash: string;
   no_hp: string | null;
+  foto: string | null;
   role: UserRole;
   created_at: Date;
+  token_version: number;
 }
 
 const USER_COLUMNS = `
@@ -31,8 +39,10 @@ const USER_COLUMNS = `
   nama,
   email,
   no_hp,
+  foto,
   role,
-  created_at
+  created_at,
+  token_version
 `;
 
 function toUserResponse(row: UserRow): UserResponse {
@@ -41,15 +51,12 @@ function toUserResponse(row: UserRow): UserResponse {
     nama: row.nama,
     email: row.email,
     no_hp: row.no_hp,
+    foto: row.foto ?? null,
     role: row.role,
     created_at: row.created_at?.toISOString(),
   };
 }
 
-/**
- * Membuat akun baru (SRS Tabel 3.1 Fitur "Registrasi dan Login").
- * Kata sandi disimpan dalam bentuk hash bcrypt, bukan teks asli (KNF-04).
- */
 export async function registerUser(input: RegisterInput): Promise<UserResponse> {
   const existing = await pool.query<{ id: string }>(
     'SELECT id::text AS id FROM users WHERE email = $1 LIMIT 1',
@@ -78,11 +85,6 @@ export async function registerUser(input: RegisterInput): Promise<UserResponse> 
   return toUserResponse(user);
 }
 
-/**
- * Memeriksa email dan kata sandi, lalu membuat token JWT.
- * Pesan error sengaja dibuat sama untuk email salah maupun password salah
- * agar informasi akun pengguna tidak bocor.
- */
 export async function loginUser(input: LoginInput): Promise<LoginResult> {
   const result = await pool.query<UserRow>(
     `SELECT ${USER_COLUMNS}, password_hash
@@ -95,7 +97,12 @@ export async function loginUser(input: LoginInput): Promise<LoginResult> {
   const user = result.rows[0];
 
   if (!user) {
-    throw new AppError('Email atau password salah', 401);
+    // Tetap jalankan bcrypt.compare terhadap hash dummy agar waktu respons
+    // untuk email yang tidak ada mirip dengan email yang ada (anti user
+    // enumeration berbasis timing).
+    await bcrypt.compare(input.password, DUMMY_PASSWORD_HASH);
+
+    throw new AppError('Email Belum Terdaftar', 401);
   }
 
   const passwordMatches = await bcrypt.compare(input.password, user.password_hash);
@@ -108,6 +115,7 @@ export async function loginUser(input: LoginInput): Promise<LoginResult> {
     sub: user.id,
     email: user.email,
     role: user.role,
+    ver: user.token_version,
   };
 
   const options: SignOptions = {
@@ -120,4 +128,37 @@ export async function loginUser(input: LoginInput): Promise<LoginResult> {
     token,
     user: toUserResponse(user),
   };
+}
+
+/**
+ * Ambil data pengguna lengkap dari kolom identitas/versi saat verifikasi
+ * token (digunakan oleh `authenticate` dan Socket.IO handshake).
+ *
+ * Return null jika user tidak ada (lebih ringan dari throws).
+ */
+export async function getUserByTokenSubject(userId: string): Promise<
+  Pick<UserRow, 'id' | 'email' | 'role' | 'token_version'> | null
+> {
+  const result = await pool.query<Pick<UserRow, 'id' | 'email' | 'role' | 'token_version'>>(
+    `SELECT id::text AS id, email, role, token_version
+     FROM users
+     WHERE id = $1::integer
+     LIMIT 1`,
+    [userId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Menaikkan token_version pemegang ID `userId`.
+ *
+ * Dipakai saat logout agar semua sesi user tersebut otomatis kedaluwarsa,
+ * kecuali session di device lain yang sudah di-logout juga.
+ */
+export async function bumpUserTokenVersion(userId: string): Promise<void> {
+  await pool.query(
+    'UPDATE users SET token_version = token_version + 1 WHERE id = $1::integer',
+    [userId],
+  );
 }

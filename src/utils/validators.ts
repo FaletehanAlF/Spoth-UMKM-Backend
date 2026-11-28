@@ -30,21 +30,56 @@ export function paramString(value: string | string[] | undefined): string {
   return value ?? '';
 }
 
+/**
+ * Mengubah nilai query string kosong menjadi `undefined`.
+ *
+ * Frontend sering mengirim `?status=&tanggal_mulai=` saat filter belum dipilih.
+ * Tanpa helper ini, string kosong dianggap nilai tidak valid sehingga endpoint
+ * membalas 400 padahal pengguna hanya membuka halaman daftar.
+ */
+export function emptyToUndefined(value: unknown): unknown {
+  return typeof value === 'string' && value.trim() === '' ? undefined : value;
+}
+
+/**
+ * Membuat skema query opsional yang mengabaikan nilai kosong.
+ * Dipakai untuk filter daftar (status, kode booking, tanggal, dan sejenisnya).
+ */
+export function optionalQuery<T extends z.ZodType>(schema: T) {
+  return z.preprocess(emptyToUndefined, schema.optional());
+}
+
 /** Parameter pagination untuk seluruh endpoint daftar. */
 export const paginationQuerySchema = z.object({
-  page: z.coerce.number().int().min(1, 'Page minimal 1').default(1),
-  limit: z.coerce.number().int().min(1, 'Limit minimal 1').max(100, 'Limit maksimal 100').default(12),
+  page: z.preprocess(emptyToUndefined, z.coerce.number().int().min(1, 'Page minimal 1').default(1)),
+  limit: z.preprocess(
+    emptyToUndefined,
+    z.coerce.number().int().min(1, 'Limit minimal 1').max(100, 'Limit maksimal 100').default(12),
+  ),
 });
 
 export type PaginationQuery = z.infer<typeof paginationQuerySchema>;
 
-/** Tanggal `YYYY-MM-DD`. */
+/** Tanggal `YYYY-MM-DD` dengan validasi kalender yang benar. */
 export const dateOnlySchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal harus YYYY-MM-DD')
-  .refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)), {
-    message: 'Tanggal tidak valid',
-  });
+  .refine((value) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return false;
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    return (
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    );
+  }, { message: 'Tanggal tidak valid' });
 
 /** Nomor telepon Indonesia: awalan 62 / 08 dan hanya berisi angka. */
 export const phoneSchema = z

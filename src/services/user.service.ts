@@ -8,6 +8,7 @@ const USER_COLUMNS = `
   nama,
   email,
   no_hp,
+  foto,
   role,
   created_at
 `;
@@ -18,6 +19,7 @@ function toUserResponse(row: UserRow): UserResponse {
     nama: row.nama,
     email: row.email,
     no_hp: row.no_hp,
+    foto: row.foto ?? null,
     role: row.role,
     created_at: row.created_at?.toISOString(),
   };
@@ -51,10 +53,11 @@ export async function updateUserProfile(
   const result = await pool.query<UserRow>(
     `UPDATE users
      SET nama = COALESCE($2, nama),
-         no_hp = COALESCE($3, no_hp)
+         no_hp = COALESCE($3, no_hp),
+         foto = COALESCE($4, foto)
      WHERE id = $1
      RETURNING ${USER_COLUMNS}`,
-    [userId, input.nama ?? null, input.no_hp ?? null],
+    [userId, input.nama ?? null, input.no_hp ?? null, input.foto ?? null],
   );
 
   const user = result.rows[0];

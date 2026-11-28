@@ -5,6 +5,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
+    "test": "echo 'No automated tests configured'",
     "migrate": "tsx src/database/migrate.ts",
     "seed": "tsx src/database/seed.ts",
     "db:reset": "npm run migrate && npm run seed"
@@ -20,6 +21,7 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.5.0",
     "pg": "^8.23.1",
+    "socket.io": "^4.8.4",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -30,6 +32,7 @@
     "@types/multer": "^2.3.0",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
+    "socket.io-client": "^4.8.4",
     "tsx": "^4.19.0",
     "typescript": "^7.0.2"
   }

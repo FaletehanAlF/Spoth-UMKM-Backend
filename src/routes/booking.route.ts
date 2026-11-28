@@ -5,6 +5,7 @@ import { validateBody, validateParams, validateQuery } from '../middlewares/vali
 import { USER_ROLE } from '../types/domain.js';
 import { idParamSchema } from '../utils/validators.js';
 import {
+  cancelBookingAsHost,
   cancelExistingBooking,
   createNewBooking,
   getBooking,
@@ -23,7 +24,12 @@ bookingRouter.use(authenticate);
 
 // Pratinjau biaya (Tenant). Didaftarkan sebelum `/:id` agar tidak tertangkap
 // sebagai parameter id.
-bookingRouter.get('/preview-price', validateQuery(pricePreviewSchema), getPricePreview);
+bookingRouter.get(
+  '/preview-price',
+  authorize(USER_ROLE.TENANT),
+  validateQuery(pricePreviewSchema),
+  getPricePreview,
+);
 
 // Riwayat penyewaan: Tenant melihat miliknya, Host melihat pesanannya.
 bookingRouter.get('/', validateQuery(bookingQuerySchema), getBookings);
@@ -43,6 +49,13 @@ bookingRouter.post(
   authorize(USER_ROLE.TENANT),
   validateParams(idParamSchema),
   cancelExistingBooking,
+);
+
+bookingRouter.post(
+  '/:id/cancel-by-host',
+  authorize(USER_ROLE.HOST),
+  validateParams(idParamSchema),
+  cancelBookingAsHost,
 );
 
 export default bookingRouter;
